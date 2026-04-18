@@ -1,0 +1,273 @@
+<%- include('../partials/_head', { title, currentPath }) %>
+
+<div class="mb-4 flex items-center justify-between">
+  <div>
+    <a href="/templates" class="text-sm text-gray-500 hover:text-gray-700">← Plantillas</a>
+    <h1 class="mt-1 text-xl font-bold text-gray-900"><%= tmpl.name %></h1>
+    <p class="text-xs text-gray-400 mt-0.5">Arrastra el texto o usa los controles para posicionarlo. El nombre de prueba es el más largo de tus asistentes.</p>
+  </div>
+  <a href="/templates/<%= tmpl.id %>/preview-pdf" target="_blank"
+     class="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 shadow-sm">
+    Ver PDF preview
+  </a>
+</div>
+
+<div x-data="certEditor()" x-init="init()" class="flex flex-col lg:flex-row gap-5">
+
+  <!-- Canvas preview -->
+  <div class="flex-1 min-w-0">
+    <div class="bg-white border border-gray-200 rounded-lg shadow-sm overflow-hidden">
+      <div class="px-4 py-2 bg-gray-50 border-b border-gray-100 text-xs text-gray-500 font-medium flex items-center gap-2">
+        <span>Vista previa</span>
+        <span class="ml-auto text-gray-400">Arrastra el nombre para reposicionarlo</span>
+      </div>
+      <!-- SVG canvas container -->
+      <div id="cert-canvas"
+           class="relative select-none overflow-hidden bg-gray-100"
+           style="cursor: crosshair;"
+           @mousedown="startDrag($event)"
+           @mousemove="onDrag($event)"
+           @mouseup="stopDrag()"
+           @mouseleave="stopDrag()">
+
+        <!-- SVG background -->
+        <img id="cert-img"
+             src="/templates/<%= tmpl.id %>/svg"
+             class="w-full h-auto block pointer-events-none"
+             @load="onImageLoad()" />
+
+        <!-- Draggable name overlay -->
+        <div id="cert-name"
+             class="absolute pointer-events-none whitespace-nowrap"
+             :style="nameStyle">
+          <%= previewName %>
+        </div>
+      </div>
+    </div>
+    <!-- Coordinate display -->
+    <p class="mt-2 text-xs text-gray-400 text-center">
+      Posición: X=<span x-text="cfg.x.toFixed(1)"></span>% &nbsp; Y=<span x-text="cfg.y.toFixed(1)"></span>%
+    </p>
+  </div>
+
+  <!-- Controls panel -->
+  <div class="lg:w-80 flex-shrink-0 space-y-4">
+
+    <!-- Position -->
+    <div class="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">Posición</h3>
+      <div class="space-y-3">
+        <div>
+          <label class="flex justify-between text-xs text-gray-600 mb-1">
+            <span>Horizontal (X)</span><span x-text="cfg.x.toFixed(1) + '%'"></span>
+          </label>
+          <input type="range" min="0" max="100" step="0.5" x-model.number="cfg.x"
+                 class="w-full accent-indigo-600" />
+        </div>
+        <div>
+          <label class="flex justify-between text-xs text-gray-600 mb-1">
+            <span>Vertical (Y)</span><span x-text="cfg.y.toFixed(1) + '%'"></span>
+          </label>
+          <input type="range" min="0" max="100" step="0.5" x-model.number="cfg.y"
+                 class="w-full accent-indigo-600" />
+        </div>
+      </div>
+    </div>
+
+    <!-- Typography -->
+    <div class="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+      <h3 class="text-sm font-semibold text-gray-700 mb-3">Tipografía</h3>
+      <div class="space-y-3">
+
+        <!-- Font family -->
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Fuente</label>
+          <select x-model="cfg.fontFamily"
+                  class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option>Arial</option>
+            <option>Georgia</option>
+            <option>Helvetica</option>
+            <option>Times New Roman</option>
+            <option>Trebuchet MS</option>
+            <option>Verdana</option>
+            <option>Courier New</option>
+            <option>Palatino</option>
+            <option>Garamond</option>
+          </select>
+        </div>
+
+        <!-- Font size -->
+        <div>
+          <label class="flex justify-between text-xs text-gray-600 mb-1">
+            <span>Tamaño</span><span x-text="cfg.fontSize + 'px'"></span>
+          </label>
+          <input type="range" min="12" max="120" step="1" x-model.number="cfg.fontSize"
+                 class="w-full accent-indigo-600" />
+        </div>
+
+        <!-- Color -->
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Color</label>
+          <div class="flex items-center gap-2">
+            <input type="color" x-model="cfg.fontColor"
+                   class="h-8 w-14 border border-gray-300 rounded cursor-pointer" />
+            <input type="text" x-model="cfg.fontColor"
+                   class="flex-1 border border-gray-300 rounded px-2 py-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          </div>
+        </div>
+
+        <!-- Alignment -->
+        <div>
+          <label class="block text-xs text-gray-600 mb-2">Alineación</label>
+          <div class="flex rounded-md border border-gray-300 overflow-hidden">
+            <template x-for="align in ['left','center','right']" :key="align">
+              <button type="button"
+                      @click="cfg.textAlign = align"
+                      :class="cfg.textAlign === align ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                      class="flex-1 px-3 py-1.5 text-xs font-medium border-r border-gray-300 last:border-0 capitalize transition-colors"
+                      x-text="align">
+              </button>
+            </template>
+          </div>
+        </div>
+
+        <!-- Bold / Italic -->
+        <div class="flex gap-2">
+          <button type="button"
+                  @click="cfg.fontWeight = cfg.fontWeight === 'bold' ? 'normal' : 'bold'"
+                  :class="cfg.fontWeight === 'bold' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                  class="flex-1 px-3 py-1.5 text-sm font-bold border border-gray-300 rounded transition-colors">
+            N (Bold)
+          </button>
+          <button type="button"
+                  @click="cfg.fontStyle = cfg.fontStyle === 'italic' ? 'normal' : 'italic'"
+                  :class="cfg.fontStyle === 'italic' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                  class="flex-1 px-3 py-1.5 text-sm italic border border-gray-300 rounded transition-colors">
+            K (Italic)
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Save button -->
+    <button @click="save()"
+            :disabled="saving"
+            class="w-full px-4 py-3 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed transition-colors">
+      <span x-show="!saving">Guardar configuración</span>
+      <span x-show="saving" x-cloak>Guardando…</span>
+    </button>
+
+    <div x-show="saved" x-cloak x-transition
+         class="text-center text-sm text-green-600 font-medium">
+      ✓ Configuración guardada
+    </div>
+    <div x-show="saveError" x-cloak
+         class="text-center text-sm text-red-600" x-text="saveError">
+    </div>
+
+  </div>
+</div>
+
+<script>
+function certEditor() {
+  return {
+    cfg: {
+      x:          <%= tmpl.text_x %>,
+      y:          <%= tmpl.text_y %>,
+      textAlign:  '<%= tmpl.text_align %>',
+      fontFamily: '<%= tmpl.font_family %>',
+      fontSize:   <%= tmpl.font_size %>,
+      fontColor:  '<%= tmpl.font_color %>',
+      fontWeight: '<%= tmpl.font_weight %>',
+      fontStyle:  '<%= tmpl.font_style %>',
+    },
+    dragging: false,
+    saving: false,
+    saved: false,
+    saveError: null,
+
+    init() {
+      // Watch changes to re-render
+      this.$watch('cfg', () => { this.saved = false; });
+    },
+
+    get nameStyle() {
+      const anchor = this.cfg.textAlign === 'center' ? '-50%, -50%'
+                   : this.cfg.textAlign === 'right'  ? '-100%, -50%'
+                   : '0%, -50%';
+      return {
+        left:       this.cfg.x + '%',
+        top:        this.cfg.y + '%',
+        transform:  `translate(${anchor})`,
+        fontFamily: this.cfg.fontFamily,
+        fontSize:   this.cfg.fontSize + 'px',
+        color:      this.cfg.fontColor,
+        fontWeight: this.cfg.fontWeight,
+        fontStyle:  this.cfg.fontStyle,
+        textAlign:  this.cfg.textAlign,
+        lineHeight: '1.1',
+        userSelect: 'none',
+      };
+    },
+
+    onImageLoad() {
+      // Canvas ready
+    },
+
+    startDrag(e) {
+      if (e.button !== 0) return;
+      this.dragging = true;
+      this.updatePosition(e);
+    },
+
+    onDrag(e) {
+      if (!this.dragging) return;
+      this.updatePosition(e);
+    },
+
+    stopDrag() {
+      this.dragging = false;
+    },
+
+    updatePosition(e) {
+      const canvas = document.getElementById('cert-canvas');
+      const rect   = canvas.getBoundingClientRect();
+      const x = ((e.clientX - rect.left) / rect.width)  * 100;
+      const y = ((e.clientY - rect.top)  / rect.height) * 100;
+      this.cfg.x = Math.min(100, Math.max(0, Math.round(x * 10) / 10));
+      this.cfg.y = Math.min(100, Math.max(0, Math.round(y * 10) / 10));
+    },
+
+    async save() {
+      this.saving = true;
+      this.saveError = null;
+      try {
+        const body = new URLSearchParams({
+          text_x:      this.cfg.x,
+          text_y:      this.cfg.y,
+          text_align:  this.cfg.textAlign,
+          font_family: this.cfg.fontFamily,
+          font_size:   this.cfg.fontSize,
+          font_color:  this.cfg.fontColor,
+          font_weight: this.cfg.fontWeight,
+          font_style:  this.cfg.fontStyle,
+        });
+        const res = await fetch('/templates/<%= tmpl.id %>/config', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+          body: body.toString(),
+        });
+        if (!res.ok) throw new Error('Error al guardar');
+        this.saved = true;
+        setTimeout(() => this.saved = false, 3000);
+      } catch(err) {
+        this.saveError = err.message;
+      } finally {
+        this.saving = false;
+      }
+    },
+  };
+}
+</script>
+
+<%- include('../partials/_foot') %>

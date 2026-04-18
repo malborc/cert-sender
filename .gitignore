@@ -1,0 +1,18 @@
+# Secretos
+.env
+
+# Dependencias
+node_modules/
+
+# Datos persistentes (bind mounts)
+data/
+
+# Logs
+*.log
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/

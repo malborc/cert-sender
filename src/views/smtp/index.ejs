@@ -1,0 +1,64 @@
+<%- include('../partials/_head', { title, currentPath }) %>
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Perfiles SMTP</h1>
+    <p class="mt-1 text-sm text-gray-500">Cuentas de correo para el envío de certificados</p>
+  </div>
+  <a href="/smtp/new"
+     class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 shadow-sm">
+    + Nuevo perfil
+  </a>
+</div>
+
+<% if (profiles.length === 0) { %>
+  <div class="bg-white rounded-lg border border-dashed border-gray-300 py-16 text-center">
+    <p class="text-gray-400 text-sm">No hay perfiles SMTP. <a href="/smtp/new" class="text-indigo-600 hover:underline">Configura el primero</a>.</p>
+  </div>
+<% } else { %>
+<div class="space-y-3">
+  <% profiles.forEach(p => { %>
+  <div class="bg-white border border-gray-100 rounded-lg shadow-sm px-5 py-4 flex items-center justify-between gap-4"
+       x-data="{ testing: false, result: null }">
+    <div class="flex-1 min-w-0">
+      <p class="font-medium text-gray-900 text-sm"><%= p.name %></p>
+      <p class="text-xs text-gray-500 mt-0.5"><%= p.user %> → <%= p.host %>:<%= p.port %> (<%= p.secure ? 'SSL' : 'STARTTLS' %>)</p>
+      <p class="text-xs text-gray-400">Desde: <span class="text-gray-600"><%= p.from_email %></span> <% if (p.from_name) { %>(<%= p.from_name %>)<% } %></p>
+    </div>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <!-- Test button -->
+      <button @click="testSmtp('<%= p.id %>')"
+              :disabled="testing"
+              class="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded hover:bg-gray-50 disabled:opacity-60">
+        <span x-show="!testing">Probar</span>
+        <span x-show="testing" x-cloak>Probando…</span>
+      </button>
+      <span x-show="result === 'ok'" x-cloak class="text-xs text-green-600 font-medium">✓ OK</span>
+      <span x-show="result === 'error'" x-cloak class="text-xs text-red-500 font-medium">✗ Error</span>
+
+      <a href="/smtp/<%= p.id %>/edit"
+         class="px-3 py-1.5 text-xs font-medium bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100">
+        Editar
+      </a>
+      <form action="/smtp/<%= p.id %>/delete" method="POST"
+            onsubmit="return confirm('¿Eliminar este perfil?')">
+        <button class="px-3 py-1.5 text-xs font-medium bg-red-50 text-red-600 rounded hover:bg-red-100">
+          Eliminar
+        </button>
+      </form>
+    </div>
+  </div>
+  <% }); %>
+</div>
+<% } %>
+
+<script>
+async function testSmtp(id) {
+  // Find the Alpine component for this row and trigger test
+  const res = await fetch(`/smtp/${id}/test`, { method: 'POST' });
+  const data = await res.json();
+  alert(data.ok ? '✓ ' + data.message : '✗ Error: ' + data.error);
+}
+</script>
+
+<%- include('../partials/_foot') %>

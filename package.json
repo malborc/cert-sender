@@ -1,0 +1,23 @@
+{
+  "name": "cert-sender",
+  "version": "1.0.0",
+  "description": "Generador y enviador de certificados de participación en PDF vía SMTP",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "worker": "node src/worker.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.6.0",
+    "bullmq": "^5.12.0",
+    "csv-parser": "^3.0.0",
+    "ejs": "^3.1.10",
+    "express": "^4.19.2",
+    "form-data": "^4.0.0",
+    "multer": "^1.4.5-lts.1",
+    "nodemailer": "^6.9.14",
+    "node-fetch": "^2.7.0",
+    "ioredis": "^5.4.1"
+  }
+}

@@ -1,0 +1,80 @@
+services:
+  cert-sender-web:
+    image: node:24-alpine
+    container_name: cert-sender-web
+    working_dir: /app
+    command: sh -c "npm install --omit=dev && node src/server.js"
+    volumes:
+      - ./src:/app/src
+      - ./public:/app/public
+      - ./package.json:/app/package.json:ro
+      - ./data:/app/data
+      - node_modules:/app/node_modules
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://cert-sender-redis:6379
+      - GOTENBERG_URL=http://gotenberg:3000
+      - DB_PATH=/app/data/db/cert-sender.db
+    depends_on:
+      cert-sender-redis:
+        condition: service_healthy
+    networks:
+      - cert_net
+      - proxy_net
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=proxy_net"
+      - "traefik.http.routers.cert-sender.rule=Host(`certs.manuelalbor.com`)"
+      - "traefik.http.routers.cert-sender.entrypoints=web,websecure"
+      - "traefik.http.routers.cert-sender.middlewares=authentik@docker"
+      - "traefik.http.services.cert-sender.loadbalancer.server.port=3000"
+    restart: unless-stopped
+
+  cert-sender-worker:
+    image: node:24-alpine
+    container_name: cert-sender-worker
+    working_dir: /app
+    command: sh -c "npm install --omit=dev && node src/worker.js"
+    volumes:
+      - ./src:/app/src
+      - ./package.json:/app/package.json:ro
+      - ./data:/app/data
+      - node_modules:/app/node_modules
+    env_file: .env
+    environment:
+      - NODE_ENV=production
+      - REDIS_URL=redis://cert-sender-redis:6379
+      - GOTENBERG_URL=http://gotenberg:3000
+      - DB_PATH=/app/data/db/cert-sender.db
+    depends_on:
+      cert-sender-redis:
+        condition: service_healthy
+    networks:
+      - cert_net
+      - proxy_net
+    restart: unless-stopped
+
+  cert-sender-redis:
+    image: redis:7-alpine
+    container_name: cert-sender-redis
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - ./data/redis:/data
+    networks:
+      - cert_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  node_modules:
+
+networks:
+  cert_net:
+    name: cert_net
+  proxy_net:
+    external: true

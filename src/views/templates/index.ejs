@@ -1,0 +1,47 @@
+<%- include('../partials/_head', { title, currentPath }) %>
+
+<div class="flex items-center justify-between mb-6">
+  <div>
+    <h1 class="text-2xl font-bold text-gray-900">Plantillas SVG</h1>
+    <p class="mt-1 text-sm text-gray-500">Arte base de los certificados</p>
+  </div>
+  <a href="/templates/new"
+     class="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-md hover:bg-indigo-700 shadow-sm">
+    + Nueva plantilla
+  </a>
+</div>
+
+<% if (templates.length === 0) { %>
+  <div class="bg-white rounded-lg border border-dashed border-gray-300 py-16 text-center">
+    <p class="text-sm text-gray-400">No hay plantillas. <a href="/templates/new" class="text-indigo-600 hover:underline">Sube la primera</a>.</p>
+  </div>
+<% } else { %>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
+  <% templates.forEach(t => { %>
+  <div class="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+    <div class="bg-gray-100 h-40 flex items-center justify-center">
+      <img src="/templates/<%= t.id %>/svg" alt="<%= t.name %>"
+           class="max-h-36 max-w-full object-contain" />
+    </div>
+    <div class="p-4">
+      <p class="font-medium text-gray-900 text-sm truncate"><%= t.name %></p>
+      <p class="text-xs text-gray-400 mt-0.5"><%= t.font_family %> <%= t.font_size %>px — <%= t.font_color %></p>
+      <div class="flex gap-2 mt-3">
+        <a href="/templates/<%= t.id %>/edit"
+           class="flex-1 text-center text-xs font-medium px-3 py-1.5 bg-indigo-50 text-indigo-700 rounded hover:bg-indigo-100">
+          Editar posición
+        </a>
+        <form action="/templates/<%= t.id %>/delete" method="POST"
+              onsubmit="return confirm('¿Eliminar esta plantilla?')">
+          <button class="text-xs font-medium px-3 py-1.5 bg-red-50 text-red-600 rounded hover:bg-red-100">
+            Eliminar
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+  <% }); %>
+</div>
+<% } %>
+
+<%- include('../partials/_foot') %>
