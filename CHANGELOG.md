@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.1.0] — 2026-04-18
+
+### Añadido
+- **Volúmenes Docker nombrados** (`cert_db`, `cert_templates`, `cert_uploads`, `cert_redis`) — datos persistentes que sobreviven a recreaciones de contenedores y actualizaciones de imagen
+- **Vista de configuración del email** (`/campaigns/:id/email`):
+  - Toggle texto plano / HTML
+  - Editor con sintaxis apropiada según formato
+  - Preview en iframe en tiempo real (renderiza el email con el nombre más largo como muestra)
+  - Referencia de variables disponibles (`{nombre}`)
+  - Nota recordatoria de que el PDF se adjunta automáticamente
+- **Optimización del tamaño PDF**:
+  - `parseSvgDimensions()` lee `viewBox` y atributos `width`/`height` del SVG con soporte de unidades (mm, cm, pt, px, in) para ajustar el paper size de Gotenberg exactamente al arte
+  - Elimina márgenes en blanco → PDFs más compactos
+  - `estimatePdfSize()` analiza el SVG y muestra rango estimado de KB por PDF en el editor de plantillas
+  - Detecta imágenes rasterizadas embebidas (base64) y advierte sobre su impacto en el tamaño
+- **Log de envíos** (`/campaigns/:id/log`):
+  - Tabla paginada (100 registros/página) con filtros por estado
+  - **Edición inline del email** del destinatario sin recargar la página (Alpine.js + fetch)
+  - **Botón de reenvío individual** — resetea el asistente a `pending` y crea un job inmediato en BullMQ
+  - Columna `resent_at` para rastrear cuándo se realizó un reenvío
+  - Columna de error con mensaje completo en tooltip
+- **Pestañas de navegación** en todas las vistas de campaña: Campaña / Email / Log
+- Soporte HTML completo en `sendCertificate()`: envía `html` + fallback `text` cuando `email_is_html=1`
+- Migraciones inline en `db/index.js` para aplicar nuevas columnas en bases de datos existentes
+
+### Cambiado
+- `generateCertificate()` ahora retorna `{ buffer, sizeKb, dimensions }` en lugar de solo el buffer
+- Nombre del archivo PDF adjunto preserva caracteres especiales del español
+- Worker loguea el tamaño del PDF generado en KB
+
 Todos los cambios notables de este proyecto están documentados aquí.
 El formato sigue [Keep a Changelog](https://keepachangelog.com/es/1.0.0/)
 y el proyecto usa [Semantic Versioning](https://semver.org/lang/es/).
