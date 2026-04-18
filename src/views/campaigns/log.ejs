@@ -1,0 +1,242 @@
+<%- include('../partials/_head', { title, currentPath }) %>
+
+<div class="mb-5 flex items-center justify-between gap-4 flex-wrap">
+  <div>
+    <a href="/campaigns/<%= campaign.id %>" class="text-sm text-gray-500 hover:text-gray-700">← <%= campaign.name %></a>
+    <h1 class="mt-1 text-xl font-bold text-gray-900">Log de envíos</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Historial completo · Edita emails · Reenvía individualmente</p>
+  </div>
+  <!-- Tabs -->
+  <div class="flex gap-2">
+    <a href="/campaigns/<%= campaign.id %>"
+       class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded hover:bg-gray-50">Campaña</a>
+    <a href="/campaigns/<%= campaign.id %>/email"
+       class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded hover:bg-gray-50">Email</a>
+    <span class="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded">Log de envíos</span>
+  </div>
+</div>
+
+<!-- Stats bar -->
+<div class="grid grid-cols-2 sm:grid-cols-5 gap-2 mb-5">
+  <% const statItems = [
+    { label: 'Total',      val: stats.total,   color: 'text-gray-800',   filter: 'all'     },
+    { label: 'Enviados',   val: stats.sent,    color: 'text-green-600',  filter: 'sent'    },
+    { label: 'Pendientes', val: stats.pending, color: 'text-indigo-600', filter: 'pending' },
+    { label: 'Errores',    val: stats.errors,  color: 'text-red-500',    filter: 'error'   },
+    { label: 'Omitidos',   val: stats.skipped, color: 'text-gray-400',   filter: 'skipped' },
+  ]; %>
+  <% statItems.forEach(s => { %>
+  <a href="?status=<%= s.filter %>&page=1"
+     class="bg-white border rounded-lg p-3 text-center hover:border-indigo-300 transition-colors
+            <%= filterStatus === s.filter ? 'border-indigo-400 ring-1 ring-indigo-300' : 'border-gray-100' %>">
+    <p class="text-xs text-gray-500"><%= s.label %></p>
+    <p class="text-xl font-bold mt-0.5 <%= s.color %>"><%= s.val.toLocaleString() %></p>
+  </a>
+  <% }); %>
+</div>
+
+<!-- Table -->
+<div class="bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden" x-data="logTable()">
+
+  <!-- Toolbar -->
+  <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+    <div class="flex items-center gap-2">
+      <span class="text-sm text-gray-600 font-medium">
+        <%= totalCount.toLocaleString() %> registros
+        <% if (filterStatus !== 'all') { %><span class="text-indigo-600">(filtro: <%= filterStatus %>)</span><% } %>
+      </span>
+      <% if (filterStatus !== 'all') { %>
+      <a href="?status=all&page=1" class="text-xs text-gray-400 hover:text-gray-600 underline">Quitar filtro</a>
+      <% } %>
+    </div>
+    <a href="/attendees/export/<%= campaign.id %>"
+       class="text-xs font-medium px-3 py-1.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+      Exportar CSV
+    </a>
+  </div>
+
+  <div class="overflow-x-auto">
+    <table class="min-w-full divide-y divide-gray-50">
+      <thead class="bg-gray-50">
+        <tr>
+          <th class="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase w-8">#</th>
+          <th class="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
+          <th class="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
+          <th class="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase w-24">Estado</th>
+          <th class="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase w-32">Enviado</th>
+          <th class="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Error</th>
+          <th class="px-4 py-2.5 text-right text-xs font-medium text-gray-500 uppercase w-28">Acciones</th>
+        </tr>
+      </thead>
+      <tbody class="divide-y divide-gray-50">
+        <% if (attendees.length === 0) { %>
+        <tr>
+          <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-400">
+            No hay registros con el filtro seleccionado.
+          </td>
+        </tr>
+        <% } %>
+        <% attendees.forEach((a, idx) => {
+          const statusColors = {
+            pending: 'bg-gray-100 text-gray-500',
+            sent:    'bg-green-100 text-green-700',
+            error:   'bg-red-100 text-red-600',
+            skipped: 'bg-yellow-100 text-yellow-600',
+          };
+          const offset = (page - 1) * pageSize;
+        %>
+        <tr class="hover:bg-gray-50 group" x-data="attendeeRow(<%= a.id %>, `<%= a.email.replace(/`/g, '\\`') %>`, '<%= a.status %>')">
+          <td class="px-4 py-2.5 text-xs text-gray-400"><%= offset + idx + 1 %></td>
+          <td class="px-4 py-2.5 text-sm text-gray-900 max-w-xs truncate" title="<%= a.name %>"><%= a.name %></td>
+
+          <!-- Email (editable inline) -->
+          <td class="px-4 py-2.5 text-sm">
+            <div x-show="!editing" class="flex items-center gap-1">
+              <span class="text-gray-600 break-all" x-text="email"></span>
+              <button @click="editing = true"
+                      class="opacity-0 group-hover:opacity-100 ml-1 text-indigo-400 hover:text-indigo-600 transition-opacity"
+                      title="Editar email">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                </svg>
+              </button>
+            </div>
+            <div x-show="editing" x-cloak class="flex items-center gap-1">
+              <input type="email" x-model="newEmail"
+                     class="text-xs border border-indigo-300 rounded px-2 py-1 w-52 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                     @keydown.enter="saveEmail()"
+                     @keydown.escape="editing = false; newEmail = email" />
+              <button @click="saveEmail()" class="text-xs text-green-600 font-medium hover:text-green-700">✓</button>
+              <button @click="editing = false; newEmail = email" class="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div x-show="emailError" x-cloak class="text-xs text-red-500 mt-0.5" x-text="emailError"></div>
+          </td>
+
+          <!-- Status badge -->
+          <td class="px-4 py-2.5">
+            <span :class="statusClass()" class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium" x-text="currentStatus">
+            </span>
+          </td>
+
+          <!-- sent_at -->
+          <td class="px-4 py-2.5 text-xs text-gray-400">
+            <%= a.sent_at ? a.sent_at.replace('T',' ').slice(0,16) : '—' %>
+            <% if (a.resent_at) { %>
+            <div class="text-indigo-400" title="Fecha de reenvío">↺ <%= a.resent_at.replace('T',' ').slice(0,16) %></div>
+            <% } %>
+          </td>
+
+          <!-- Error message -->
+          <td class="px-4 py-2.5 text-xs text-red-400 max-w-xs truncate" title="<%= a.error_msg || '' %>">
+            <%= a.error_msg ? a.error_msg.slice(0, 80) + (a.error_msg.length > 80 ? '…' : '') : '' %>
+          </td>
+
+          <!-- Actions -->
+          <td class="px-4 py-2.5 text-right">
+            <button @click="resend()"
+                    :disabled="resending || currentStatus === 'pending'"
+                    :title="currentStatus === 'pending' ? 'Ya está pendiente de envío' : 'Reenviar certificado'"
+                    class="text-xs font-medium px-2.5 py-1 rounded border transition-colors
+                           disabled:opacity-40 disabled:cursor-not-allowed
+                           border-indigo-200 text-indigo-600 hover:bg-indigo-50">
+              <span x-show="!resending">↺ Reenviar</span>
+              <span x-show="resending" x-cloak>Enviando…</span>
+            </button>
+          </td>
+        </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Pagination -->
+  <% if (totalPages > 1) { %>
+  <div class="px-4 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-500">
+    <span>Página <%= page %> de <%= totalPages %></span>
+    <div class="flex gap-1">
+      <% if (page > 1) { %>
+      <a href="?status=<%= filterStatus %>&page=<%= page - 1 %>"
+         class="px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50">← Anterior</a>
+      <% } %>
+      <% for (let p = Math.max(1, page-2); p <= Math.min(totalPages, page+2); p++) { %>
+      <a href="?status=<%= filterStatus %>&page=<%= p %>"
+         class="px-3 py-1.5 border rounded <%= p === page ? 'bg-indigo-600 text-white border-indigo-600' : 'border-gray-200 hover:bg-gray-50' %>">
+        <%= p %>
+      </a>
+      <% } %>
+      <% if (page < totalPages) { %>
+      <a href="?status=<%= filterStatus %>&page=<%= page + 1 %>"
+         class="px-3 py-1.5 border border-gray-200 rounded hover:bg-gray-50">Siguiente →</a>
+      <% } %>
+    </div>
+  </div>
+  <% } %>
+</div>
+
+<script>
+function logTable() {
+  return {};
+}
+
+function attendeeRow(id, initialEmail, initialStatus) {
+  return {
+    id,
+    email:         initialEmail,
+    newEmail:      initialEmail,
+    currentStatus: initialStatus,
+    editing:       false,
+    emailError:    null,
+    resending:     false,
+
+    statusClass() {
+      const map = {
+        pending: 'bg-gray-100 text-gray-500',
+        sent:    'bg-green-100 text-green-700',
+        error:   'bg-red-100 text-red-600',
+        skipped: 'bg-yellow-100 text-yellow-600',
+      };
+      return map[this.currentStatus] || map.pending;
+    },
+
+    async saveEmail() {
+      this.emailError = null;
+      const res  = await fetch(`/attendees/${this.id}/update-email`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+        body:    `email=${encodeURIComponent(this.newEmail)}`,
+      });
+      const data = await res.json();
+      if (data.ok) {
+        this.email   = data.email;
+        this.newEmail = data.email;
+        this.editing = false;
+      } else {
+        this.emailError = data.error;
+      }
+    },
+
+    async resend() {
+      if (!confirm(`¿Reenviar certificado a ${this.email}?`)) return;
+      this.resending = true;
+      try {
+        const res = await fetch(`/attendees/${this.id}/resend`, {
+          method:  'POST',
+          headers: { 'Accept': 'application/json' },
+        });
+        const data = await res.json();
+        if (data.ok) {
+          this.currentStatus = 'pending';
+        } else {
+          alert('Error: ' + (data.error || 'No se pudo encolar el reenvío'));
+        }
+      } catch (e) {
+        alert('Error de red: ' + e.message);
+      } finally {
+        this.resending = false;
+      }
+    },
+  };
+}
+</script>
+
+<%- include('../partials/_foot') %>

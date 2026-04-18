@@ -106,4 +106,57 @@ router.get('/export/:campaignId', (req, res) => {
   res.send(lines.join('\n'));
 });
 
+// POST /attendees/:id/update-email — edit attendee email (AJAX)
+router.post('/:id/update-email', (req, res) => {
+  const { email } = req.body;
+  const attendee  = db.prepare('SELECT * FROM attendees WHERE id = ?').get(req.params.id);
+  if (!attendee) return res.status(404).json({ ok: false, error: 'Asistente no encontrado' });
+
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+    return res.json({ ok: false, error: 'Email inválido' });
+  }
+
+  db.prepare('UPDATE attendees SET email = ? WHERE id = ?').run(email.trim(), req.params.id);
+  res.json({ ok: true, email: email.trim() });
+});
+
+// POST /attendees/:id/resend — reset status and enqueue immediate job
+router.post('/:id/resend', async (req, res) => {
+  const attendee = db.prepare('SELECT * FROM attendees WHERE id = ?').get(req.params.id);
+  if (!attendee) return res.status(404).json({ ok: false, error: 'Asistente no encontrado' });
+
+  const campaign = db.prepare('SELECT * FROM campaigns WHERE id = ?').get(attendee.campaign_id);
+  if (!campaign) return res.status(404).json({ ok: false, error: 'Campaña no encontrada' });
+
+  // Reset attendee status to pending
+  db.prepare(`
+    UPDATE attendees SET status='pending', sent_at=NULL, error_msg=NULL, resent_at=datetime('now') WHERE id=?
+  `).run(attendee.id);
+
+  // Mark campaign as sending if it was done/error
+  if (['done', 'error', 'paused', 'draft'].includes(campaign.status)) {
+    db.prepare("UPDATE campaigns SET status='sending' WHERE id=?").run(campaign.id);
+  }
+
+  // Enqueue with no delay (immediate)
+  const { getQueue } = require('../services/queue');
+  const queue = getQueue();
+  await queue.add(
+    `cert-${campaign.id}-${attendee.id}-resend`,
+    { campaignId: campaign.id, attendeeId: attendee.id },
+    {
+      jobId:   `cert-${campaign.id}-${attendee.id}-${Date.now()}`,
+      delay:   0,
+      attempts: 3,
+      backoff: { type: 'exponential', delay: 10000 },
+      removeOnComplete: { age: 86400 },
+      removeOnFail:     { age: 86400 * 7 },
+    }
+  );
+
+  const redirectTo = req.get('Referer') || `/campaigns/${campaign.id}/log`;
+  if (req.accepts('json')) return res.json({ ok: true });
+  res.redirect(redirectTo);
+});
+
 module.exports = router;

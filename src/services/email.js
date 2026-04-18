@@ -42,28 +42,41 @@ async function testSmtp(profile) {
 /**
  * Send a certificate email to one attendee.
  * @param {Object} profile      - SMTP profile record
- * @param {Object} campaign     - Campaign record
+ * @param {Object} campaign     - Campaign record (email_body, email_is_html, email_subject)
  * @param {Object} attendee     - Attendee record
- * @param {Buffer} pdfBuffer    - PDF binary
+ * @param {Buffer} pdfBuffer    - PDF binary (attached as PDF)
  */
 async function sendCertificate(profile, campaign, attendee, pdfBuffer) {
   const transporter = createTransporter(profile);
 
-  const body = campaign.email_body.replace(/{nombre}/gi, attendee.name);
-  const filename = `certificado-${attendee.name.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+  const bodyRaw  = campaign.email_body.replace(/{nombre}/gi, attendee.name);
+  const isHtml   = campaign.email_is_html === 1;
+  const filename = `certificado-${attendee.name.replace(/[^a-zA-Z0-9áéíóúüñÁÉÍÓÚÜÑ\s]/g, '_').trim().replace(/\s+/g, '_')}.pdf`;
 
-  await transporter.sendMail({
-    from:    `"${profile.from_name}" <${profile.from_email}>`,
+  const mailOptions = {
+    from:    profile.from_name ? `"${profile.from_name}" <${profile.from_email}>` : profile.from_email,
     to:      attendee.email,
     subject: campaign.email_subject,
-    text:    body,
-    html:    body.replace(/\n/g, '<br>'),
     attachments: [{
       filename,
       content:     pdfBuffer,
       contentType: 'application/pdf',
     }],
-  });
+  };
+
+  if (isHtml) {
+    // HTML body: send both html and a plain-text fallback (strip tags)
+    mailOptions.html = bodyRaw;
+    mailOptions.text = bodyRaw.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '');
+  } else {
+    // Plain text: send as-is, also auto-generate html version
+    mailOptions.text = bodyRaw;
+    mailOptions.html = bodyRaw
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/\n/g, '<br>');
+  }
+
+  await transporter.sendMail(mailOptions);
 }
 
 module.exports = { encrypt, decrypt, testSmtp, sendCertificate };

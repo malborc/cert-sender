@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
   template_id         INTEGER REFERENCES templates(id) ON DELETE SET NULL,
   email_subject       TEXT    NOT NULL DEFAULT 'Tu certificado de participación',
   email_body          TEXT    NOT NULL DEFAULT 'Estimado/a {nombre},\n\nAdjunto encontrarás tu certificado de participación.\n\nGracias por tu asistencia.',
+  email_is_html       INTEGER NOT NULL DEFAULT 0,  -- 0=plain text, 1=HTML
   batch_size          INTEGER NOT NULL DEFAULT 30,
   batch_interval_min  INTEGER NOT NULL DEFAULT 10,
   status              TEXT    NOT NULL DEFAULT 'draft', -- draft|sending|paused|done|error

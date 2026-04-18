@@ -1,10 +1,21 @@
 <%- include('../partials/_head', { title, currentPath }) %>
 
-<div class="mb-5 flex items-start justify-between gap-4">
+<div class="mb-5 flex items-start justify-between gap-4 flex-wrap">
   <div>
     <a href="/campaigns" class="text-sm text-gray-500 hover:text-gray-700">← Campañas</a>
     <h1 class="mt-1 text-2xl font-bold text-gray-900"><%= campaign.name %></h1>
     <p class="text-sm text-gray-500"><%= campaign.event_date || '' %> &nbsp;•&nbsp; Lotes de <%= campaign.batch_size %> c/u cada <%= campaign.batch_interval_min %> min</p>
+  </div>
+  <!-- Tabs -->
+  <div class="flex gap-2">
+    <span class="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded">Campaña</span>
+    <a href="/campaigns/<%= campaign.id %>/email"
+       class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded hover:bg-gray-50">Email</a>
+    <a href="/campaigns/<%= campaign.id %>/log"
+       class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded hover:bg-gray-50">
+      Log de envíos
+      <% if (stats.errors > 0) { %><span class="ml-1 bg-red-100 text-red-600 text-xs px-1 rounded-full"><%= stats.errors %></span><% } %>
+    </a>
   </div>
   <div class="flex gap-2 flex-shrink-0">
     <% if (['draft','paused','error'].includes(campaign.status) && stats.pending > 0) { %>

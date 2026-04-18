@@ -8,7 +8,9 @@ services:
       - ./src:/app/src
       - ./public:/app/public
       - ./package.json:/app/package.json:ro
-      - ./data:/app/data
+      - cert_db:/app/data/db
+      - cert_templates:/app/data/templates
+      - cert_uploads:/app/data/uploads
       - node_modules:/app/node_modules
     env_file: .env
     environment:
@@ -39,7 +41,9 @@ services:
     volumes:
       - ./src:/app/src
       - ./package.json:/app/package.json:ro
-      - ./data:/app/data
+      - cert_db:/app/data/db
+      - cert_templates:/app/data/templates
+      - cert_uploads:/app/data/uploads
       - node_modules:/app/node_modules
     env_file: .env
     environment:
@@ -60,7 +64,7 @@ services:
     container_name: cert-sender-redis
     command: redis-server --save 60 1 --loglevel warning
     volumes:
-      - ./data/redis:/data
+      - cert_redis:/data
     networks:
       - cert_net
     healthcheck:
@@ -72,6 +76,14 @@ services:
 
 volumes:
   node_modules:
+  cert_db:
+    name: cert_db
+  cert_templates:
+    name: cert_templates
+  cert_uploads:
+    name: cert_uploads
+  cert_redis:
+    name: cert_redis
 
 networks:
   cert_net:

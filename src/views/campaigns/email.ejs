@@ -1,0 +1,166 @@
+<%- include('../partials/_head', { title, currentPath }) %>
+
+<div class="mb-5 flex items-center justify-between">
+  <div>
+    <a href="/campaigns/<%= campaign.id %>" class="text-sm text-gray-500 hover:text-gray-700">← <%= campaign.name %></a>
+    <h1 class="mt-1 text-xl font-bold text-gray-900">Configurar correo</h1>
+    <p class="text-xs text-gray-400 mt-0.5">Este mensaje acompañará el certificado PDF adjunto</p>
+  </div>
+  <!-- Tabs -->
+  <div class="flex gap-2">
+    <a href="/campaigns/<%= campaign.id %>"
+       class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded hover:bg-gray-50">Campaña</a>
+    <span class="px-3 py-1.5 text-xs font-medium bg-indigo-600 text-white rounded">Email</span>
+    <a href="/campaigns/<%= campaign.id %>/log"
+       class="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded hover:bg-gray-50">Log de envíos</a>
+  </div>
+</div>
+
+<% if (saved) { %>
+<div class="mb-4 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded text-sm flex items-center gap-2">
+  <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+    <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+  </svg>
+  Configuración de email guardada correctamente.
+</div>
+<% } %>
+
+<div class="flex flex-col lg:flex-row gap-5" x-data="emailEditor()">
+
+  <!-- Editor panel -->
+  <div class="flex-1 min-w-0">
+    <form action="/campaigns/<%= campaign.id %>/email" method="POST">
+
+      <!-- Subject -->
+      <div class="bg-white border border-gray-100 rounded-lg shadow-sm p-5 mb-4">
+        <label class="block text-sm font-semibold text-gray-700 mb-2">Asunto del correo</label>
+        <input type="text" name="email_subject" x-model="subject"
+               value="<%= campaign.email_subject %>"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+               placeholder="Tu certificado de participación" />
+      </div>
+
+      <!-- Format toggle + body -->
+      <div class="bg-white border border-gray-100 rounded-lg shadow-sm p-5 mb-4">
+        <div class="flex items-center justify-between mb-3">
+          <label class="text-sm font-semibold text-gray-700">Cuerpo del correo</label>
+          <!-- HTML / Plain text toggle -->
+          <div class="flex items-center gap-3">
+            <span class="text-xs text-gray-500">Formato:</span>
+            <div class="flex rounded-md border border-gray-300 overflow-hidden text-xs">
+              <button type="button"
+                      @click="isHtml = false"
+                      :class="!isHtml ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                      class="px-3 py-1.5 font-medium transition-colors border-r border-gray-300">
+                Texto plano
+              </button>
+              <button type="button"
+                      @click="isHtml = true"
+                      :class="isHtml ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                      class="px-3 py-1.5 font-medium transition-colors">
+                HTML
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hidden input for is_html -->
+        <input type="hidden" name="email_is_html" :value="isHtml ? '1' : ''">
+
+        <!-- Plain text hint -->
+        <div x-show="!isHtml" class="mb-2 text-xs text-gray-400">
+          Texto simple. Los saltos de línea se respetan.
+        </div>
+
+        <!-- HTML hint -->
+        <div x-show="isHtml" x-cloak class="mb-2 text-xs text-gray-400">
+          Puedes usar etiquetas HTML: <code class="bg-gray-100 px-1 rounded">&lt;b&gt;</code>, <code class="bg-gray-100 px-1 rounded">&lt;br&gt;</code>, <code class="bg-gray-100 px-1 rounded">&lt;p&gt;</code>, <code class="bg-gray-100 px-1 rounded">&lt;a href="..."&gt;</code>, etc.
+        </div>
+
+        <textarea name="email_body" x-model="body" rows="14"
+                  :class="isHtml ? 'font-mono text-xs' : 'font-sans text-sm'"
+                  class="w-full border border-gray-300 rounded-md px-3 py-2 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-y leading-relaxed"
+                  placeholder="Escribe el cuerpo del correo aquí…"><%= campaign.email_body %></textarea>
+
+        <!-- Variable reference -->
+        <div class="mt-3 p-3 bg-amber-50 border border-amber-200 rounded text-xs text-amber-800">
+          <p class="font-semibold mb-1">Variables disponibles:</p>
+          <ul class="space-y-0.5">
+            <li><code class="bg-amber-100 px-1 rounded">{nombre}</code> — Nombre completo del asistente</li>
+          </ul>
+          <p class="mt-2 text-amber-600">El certificado PDF se adjunta automáticamente al correo.</p>
+        </div>
+      </div>
+
+      <button type="submit"
+              class="w-full px-4 py-2.5 bg-indigo-600 text-white text-sm font-semibold rounded-lg hover:bg-indigo-700 shadow-sm">
+        Guardar configuración
+      </button>
+    </form>
+  </div>
+
+  <!-- Preview panel -->
+  <div class="lg:w-96 flex-shrink-0">
+    <div class="bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden sticky top-4">
+      <div class="px-4 py-3 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+        <span class="text-sm font-semibold text-gray-700">Vista previa</span>
+        <button type="button" @click="refreshPreview()"
+                class="text-xs text-indigo-600 hover:underline">Actualizar</button>
+      </div>
+
+      <!-- Email client mockup -->
+      <div class="p-4 border-b border-gray-50 text-xs text-gray-500 space-y-1">
+        <div class="flex gap-2">
+          <span class="font-medium text-gray-600 w-14 flex-shrink-0">Asunto:</span>
+          <span x-text="subject || '(sin asunto)'" class="text-gray-800 font-medium"></span>
+        </div>
+        <div class="flex gap-2">
+          <span class="font-medium text-gray-600 w-14 flex-shrink-0">Para:</span>
+          <span class="text-gray-500"><%= sampleName %> &lt;asistente@ejemplo.com&gt;</span>
+        </div>
+        <div class="flex gap-2">
+          <span class="font-medium text-gray-600 w-14 flex-shrink-0">Adjunto:</span>
+          <span class="text-indigo-600 flex items-center gap-1">
+            <svg class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18.375 12.739l-7.693 7.693a4.5 4.5 0 01-6.364-6.364l10.94-10.94A3 3 0 1119.5 7.372L8.552 18.32m.009-.01l-.01.01m5.699-9.941l-7.81 7.81a1.5 1.5 0 002.112 2.13" />
+            </svg>
+            certificado-<%= sampleName.split(' ')[0] %>.pdf
+          </span>
+        </div>
+      </div>
+
+      <!-- Iframe preview -->
+      <div class="relative" style="height: 400px;">
+        <iframe id="email-preview-frame"
+                src="/campaigns/<%= campaign.id %>/email/preview"
+                class="w-full h-full border-0"
+                sandbox="allow-same-origin"></iframe>
+      </div>
+
+      <div class="p-3 bg-gray-50 border-t border-gray-100 text-xs text-gray-400 text-center">
+        Nombre de prueba: <strong class="text-gray-600"><%= sampleName %></strong>
+        <% if (!sampleName || sampleName === 'Nombre de Asistente') { %>
+        — <a href="/campaigns/<%= campaign.id %>" class="text-indigo-500 hover:underline">Importa asistentes para usar el nombre más largo</a>
+        <% } %>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+function emailEditor() {
+  return {
+    subject: `<%= campaign.email_subject.replace(/`/g, '\\`') %>`,
+    body:    `<%= campaign.email_body.replace(/`/g, '\\`').replace(/\n/g, '\\n') %>`,
+    isHtml:  <%= campaign.email_is_html ? 'true' : 'false' %>,
+
+    refreshPreview() {
+      const frame = document.getElementById('email-preview-frame');
+      frame.src = frame.src; // force reload
+    },
+  };
+}
+</script>
+
+<%- include('../partials/_foot') %>

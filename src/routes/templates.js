@@ -5,6 +5,7 @@ const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
 const db       = require('../db/index');
+const { parseSvgDimensions, estimatePdfSize } = require('../services/pdf');
 
 const router   = express.Router();
 const TMPL_DIR = path.join(__dirname, '../../data/templates');
@@ -65,11 +66,23 @@ router.get('/:id/edit', (req, res) => {
   `).get();
   const previewName = longestRow ? longestRow.name : 'Nombre de Ejemplo Largo';
 
+  // PDF size analysis
+  const svgPath = path.join(TMPL_DIR, tmpl.filename);
+  let pdfEstimate = null;
+  let pdfDimensions = null;
+  if (fs.existsSync(svgPath)) {
+    const svgContent = fs.readFileSync(svgPath, 'utf8');
+    pdfEstimate  = estimatePdfSize(svgContent);
+    pdfDimensions = parseSvgDimensions(svgContent);
+  }
+
   res.render('templates/edit', {
     title: `Editar: ${tmpl.name}`,
     currentPath: '/templates',
     tmpl,
     previewName,
+    pdfEstimate,
+    pdfDimensions,
   });
 });
 

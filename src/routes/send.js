@@ -24,9 +24,11 @@ router.get('/:campaignId/preview-pdf', async (req, res, next) => {
     `).get(req.params.campaignId);
     const previewName = longestRow ? longestRow.name : 'Nombre de Asistente de Ejemplo';
 
-    const pdfBuffer = await generateCertificate(tmpl, previewName);
+    const { buffer: pdfBuffer, sizeKb, dimensions } = await generateCertificate(tmpl, previewName);
 
     res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('X-PDF-Size-KB', String(sizeKb));
+    res.setHeader('X-PDF-Dimensions', `${dimensions.widthIn}x${dimensions.heightIn}in`);
     res.setHeader('Content-Disposition', `inline; filename="preview-certificado.pdf"`);
     res.send(pdfBuffer);
   } catch (err) {

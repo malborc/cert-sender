@@ -44,16 +44,17 @@ const worker = new Worker('cert-email', async (job) => {
 
   // Generate PDF
   console.log(`[worker] Generating PDF for: ${attendee.name} <${attendee.email}>`);
-  const pdfBuffer = await generateCertificate(tmpl, attendee.name);
+  const { buffer: pdfBuffer, sizeKb } = await generateCertificate(tmpl, attendee.name);
+  console.log(`[worker] PDF generated: ${sizeKb} KB`);
 
-  // Send email
+  // Send email (with PDF attached)
   await sendCertificate(profile, campaign, attendee, pdfBuffer);
 
   // Mark as sent
   db.prepare("UPDATE attendees SET status='sent', sent_at=datetime('now') WHERE id=?").run(attendeeId);
-  console.log(`[worker] Sent to ${attendee.email}`);
+  console.log(`[worker] Sent to ${attendee.email} (PDF ${sizeKb} KB)`);
 
-  return { sent: true };
+  return { sent: true, sizeKb };
 
 }, {
   connection,
