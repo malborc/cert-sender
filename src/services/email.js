@@ -23,11 +23,13 @@ function decrypt(enc) {
 // ── Transporter factory ────────────────────────────────
 function createTransporter(profile) {
   const password = decrypt(profile.password_enc);
+  const secure   = profile.secure === 1;
   return nodemailer.createTransport({
     host:   profile.host,
     port:   profile.port,
-    secure: profile.secure === 1,
+    secure,
     auth:   { user: profile.user, pass: password },
+    tls:    { rejectUnauthorized: false },
   });
 }
 

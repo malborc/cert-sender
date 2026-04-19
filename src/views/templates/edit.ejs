@@ -24,7 +24,7 @@
       <!-- SVG canvas container -->
       <div id="cert-canvas"
            class="relative select-none overflow-hidden bg-gray-100"
-           style="cursor: crosshair;"
+           style="cursor: crosshair; container-type: inline-size;"
            @mousedown="startDrag($event)"
            @mousemove="onDrag($event)"
            @mouseup="stopDrag()"
@@ -33,21 +33,73 @@
         <!-- SVG background -->
         <img id="cert-img"
              src="/templates/<%= tmpl.id %>/svg"
-             class="w-full h-auto block pointer-events-none"
-             @load="onImageLoad()" />
+             class="w-full h-auto block pointer-events-none" />
 
         <!-- Draggable name overlay -->
         <div id="cert-name"
              class="absolute pointer-events-none whitespace-nowrap"
-             :style="nameStyle">
+             :style="nameStyle"
+             :class="activeDrag === 'name' ? 'ring-2 ring-indigo-400 ring-offset-1' : ''">
           <%= previewName %>
+        </div>
+
+        <!-- Draggable QR overlay -->
+        <div x-show="cfg.qrEnabled"
+             id="cert-qr"
+             class="absolute pointer-events-none select-none"
+             :class="activeDrag === 'qr' ? 'ring-2 ring-purple-400 ring-offset-1' : ''"
+             :style="qrStyle">
+          <!-- Placeholder QR: simple grid pattern -->
+          <svg width="100%" height="100%" viewBox="-0.6 -0.6 8.2 8.2" xmlns="http://www.w3.org/2000/svg" style="display:block;opacity:0.9;border-radius:3px;">
+            <rect x="-0.6" y="-0.6" width="8.2" height="8.2" fill="white" rx="0.3"/>
+            <!-- Top-left finder -->
+            <rect x="0" y="0" width="3" height="3" fill="#111" rx="0.15"/>
+            <rect x="0.5" y="0.5" width="2" height="2" fill="white" rx="0.1"/>
+            <rect x="1" y="1" width="1" height="1" fill="#111"/>
+            <!-- Top-right finder -->
+            <rect x="4" y="0" width="3" height="3" fill="#111" rx="0.15"/>
+            <rect x="4.5" y="0.5" width="2" height="2" fill="white" rx="0.1"/>
+            <rect x="5" y="1" width="1" height="1" fill="#111"/>
+            <!-- Bottom-left finder -->
+            <rect x="0" y="4" width="3" height="3" fill="#111" rx="0.15"/>
+            <rect x="0.5" y="4.5" width="2" height="2" fill="white" rx="0.1"/>
+            <rect x="1" y="5" width="1" height="1" fill="#111"/>
+            <!-- Data cells (decorative) -->
+            <rect x="3.5" y="3.5" width="0.7" height="0.7" fill="#111"/>
+            <rect x="4.5" y="3.5" width="0.7" height="0.7" fill="#111"/>
+            <rect x="3.5" y="4.5" width="0.7" height="0.7" fill="#111"/>
+            <rect x="5.5" y="4.5" width="0.7" height="0.7" fill="#111"/>
+            <rect x="3.5" y="5.5" width="0.7" height="0.7" fill="#111"/>
+            <rect x="6" y="5.5" width="0.7" height="0.7" fill="#111"/>
+            <rect x="4.5" y="6" width="0.7" height="0.7" fill="#111"/>
+          </svg>
         </div>
       </div>
     </div>
     <!-- Coordinate display -->
     <p class="mt-2 text-xs text-gray-400 text-center">
-      Posición: X=<span x-text="cfg.x.toFixed(1)"></span>% &nbsp; Y=<span x-text="cfg.y.toFixed(1)"></span>%
+      <span x-show="activeDrag !== 'qr'">
+        Nombre — X=<span x-text="cfg.x.toFixed(1)"></span>% &nbsp; Y=<span x-text="cfg.y.toFixed(1)"></span>%
+      </span>
+      <span x-show="activeDrag === 'qr' || (cfg.qrEnabled && activeDrag === null)" x-cloak>
+        &nbsp;|&nbsp; QR — X=<span x-text="cfg.qrX.toFixed(1)"></span>% &nbsp; Y=<span x-text="cfg.qrY.toFixed(1)"></span>%
+      </span>
     </p>
+    <!-- Drag mode selector (only visible when QR is enabled) -->
+    <div x-show="cfg.qrEnabled" x-cloak class="mt-2 flex justify-center gap-2 text-xs">
+      <button type="button"
+              @click="dragTarget = 'name'"
+              :class="dragTarget === 'name' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 border border-gray-300'"
+              class="px-3 py-1 rounded-full transition-colors">
+        Arrastrar nombre
+      </button>
+      <button type="button"
+              @click="dragTarget = 'qr'"
+              :class="dragTarget === 'qr' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 border border-gray-300'"
+              class="px-3 py-1 rounded-full transition-colors">
+        Arrastrar QR
+      </button>
+    </div>
   </div>
 
   <!-- Controls panel -->
@@ -81,27 +133,49 @@
 
         <!-- Font family -->
         <div>
-          <label class="block text-xs text-gray-600 mb-1">Fuente</label>
-          <select x-model="cfg.fontFamily"
-                  class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
-            <option>Arial</option>
-            <option>Georgia</option>
-            <option>Helvetica</option>
-            <option>Times New Roman</option>
-            <option>Trebuchet MS</option>
-            <option>Verdana</option>
-            <option>Courier New</option>
-            <option>Palatino</option>
-            <option>Garamond</option>
-          </select>
+          <label class="block text-xs text-gray-600 mb-1">
+            Fuente
+            <span class="text-gray-400 font-normal">— sistema o cualquier Google Font</span>
+          </label>
+          <input type="text" x-model="cfg.fontFamily" list="font-suggestions"
+                 @change="loadGoogleFont(cfg.fontFamily)"
+                 @input.debounce.600ms="loadGoogleFont(cfg.fontFamily)"
+                 placeholder="Ej: Playfair Display, Great Vibes…"
+                 class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+          <datalist id="font-suggestions">
+            <option value="Arial">        <option value="Georgia">       <option value="Helvetica">
+            <option value="Times New Roman"> <option value="Verdana">   <option value="Trebuchet MS">
+            <option value="Courier New">  <option value="Palatino">     <option value="Garamond">
+            <!-- Script / Cursiva -->
+            <option value="Great Vibes">  <option value="Dancing Script"> <option value="Pacifico">
+            <option value="Pinyon Script"> <option value="Sacramento">  <option value="Tangerine">
+            <option value="Allura">       <option value="Satisfy">      <option value="Lobster">
+            <option value="Kaushan Script"> <option value="Yellowtail"> <option value="Alex Brush">
+            <!-- Serif elegante -->
+            <option value="Playfair Display"> <option value="Cormorant Garamond"> <option value="Lora">
+            <option value="Merriweather"> <option value="Cinzel">       <option value="EB Garamond">
+            <option value="Libre Baskerville"> <option value="Crimson Text"> <option value="Spectral">
+            <option value="Cardo">        <option value="Josefin Slab"> <option value="Arvo">
+            <!-- Sans-serif -->
+            <option value="Montserrat">   <option value="Raleway">      <option value="Nunito">
+            <option value="Poppins">      <option value="Open Sans">    <option value="Lato">
+            <option value="Oswald">       <option value="Roboto">       <option value="Source Sans 3">
+            <option value="Quicksand">    <option value="Exo 2">        <option value="Jost">
+          </datalist>
+          <!-- Preview de la fuente seleccionada -->
+          <p class="mt-1.5 text-center text-gray-400 truncate transition-all"
+             :style="{ fontFamily: cfg.fontFamily, fontSize: '15px' }">
+            AaBbCc — Certificado de Participación
+          </p>
         </div>
 
         <!-- Font size -->
         <div>
           <label class="flex justify-between text-xs text-gray-600 mb-1">
-            <span>Tamaño</span><span x-text="cfg.fontSize + 'px'"></span>
+            <span>Tamaño</span>
+            <span x-text="cfg.fontSize + 'px'" title="Valor real en el PDF"></span>
           </label>
-          <input type="range" min="12" max="120" step="1" x-model.number="cfg.fontSize"
+          <input type="range" min="12" max="300" step="1" x-model.number="cfg.fontSize"
                  class="w-full accent-indigo-600" />
         </div>
 
@@ -131,20 +205,84 @@
           </div>
         </div>
 
-        <!-- Bold / Italic -->
-        <div class="flex gap-2">
-          <button type="button"
-                  @click="cfg.fontWeight = cfg.fontWeight === 'bold' ? 'normal' : 'bold'"
-                  :class="cfg.fontWeight === 'bold' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-                  class="flex-1 px-3 py-1.5 text-sm font-bold border border-gray-300 rounded transition-colors">
-            N (Bold)
-          </button>
+        <!-- Font weight -->
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Peso</label>
+          <select x-model="cfg.fontWeight"
+                  class="w-full border border-gray-300 rounded px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            <option value="300">300 — Light</option>
+            <option value="400">400 — Regular</option>
+            <option value="500">500 — Medium</option>
+            <option value="600">600 — SemiBold</option>
+            <option value="700">700 — Bold</option>
+            <option value="800">800 — ExtraBold</option>
+            <option value="900">900 — Black</option>
+          </select>
+        </div>
+
+        <!-- Italic -->
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Estilo</label>
           <button type="button"
                   @click="cfg.fontStyle = cfg.fontStyle === 'italic' ? 'normal' : 'italic'"
                   :class="cfg.fontStyle === 'italic' ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
-                  class="flex-1 px-3 py-1.5 text-sm italic border border-gray-300 rounded transition-colors">
-            K (Italic)
+                  class="w-full px-3 py-1.5 text-sm italic border border-gray-300 rounded transition-colors">
+            <span x-text="cfg.fontStyle === 'italic' ? 'Italic ✓' : 'Italic'"></span>
           </button>
+        </div>
+
+        <!-- Uppercase -->
+        <div>
+          <label class="block text-xs text-gray-600 mb-1">Mayúsculas</label>
+          <button type="button"
+                  @click="cfg.nameUppercase = !cfg.nameUppercase"
+                  :class="cfg.nameUppercase ? 'bg-indigo-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'"
+                  class="w-full px-3 py-1.5 text-sm font-medium border border-gray-300 rounded transition-colors tracking-wide uppercase">
+            <span x-text="cfg.nameUppercase ? 'MAYÚSCULAS ✓' : 'mayúsculas'"></span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR Code position -->
+    <div class="bg-white border border-gray-100 rounded-lg shadow-sm p-4">
+      <div class="flex items-center justify-between mb-1">
+        <h3 class="text-sm font-semibold text-gray-700">Posición del QR</h3>
+        <button type="button"
+                @click="cfg.qrEnabled = !cfg.qrEnabled; if(cfg.qrEnabled) dragTarget='qr';"
+                :class="cfg.qrEnabled ? 'bg-purple-600' : 'bg-gray-200'"
+                class="relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full transition-colors duration-200 ease-in-out"
+                title="Mostrar/ocultar QR en preview">
+          <span :class="cfg.qrEnabled ? 'translate-x-4' : 'translate-x-0.5'"
+                class="inline-block h-4 w-4 mt-0.5 transform rounded-full bg-white shadow transition duration-200 ease-in-out"></span>
+        </button>
+      </div>
+      <p class="text-xs text-gray-400 mb-3">La posición se guarda aquí. El QR se activa por campaña.</p>
+
+      <div class="space-y-3">
+        <div>
+          <label class="flex justify-between text-xs text-gray-600 mb-1">
+            <span>Horizontal (X)</span><span x-text="cfg.qrX.toFixed(1) + '%'"></span>
+          </label>
+          <input type="range" min="0" max="100" step="0.5" x-model.number="cfg.qrX"
+                 @input="cfg.qrEnabled = true; dragTarget='qr';"
+                 class="w-full accent-purple-600" />
+        </div>
+        <div>
+          <label class="flex justify-between text-xs text-gray-600 mb-1">
+            <span>Vertical (Y)</span><span x-text="cfg.qrY.toFixed(1) + '%'"></span>
+          </label>
+          <input type="range" min="0" max="100" step="0.5" x-model.number="cfg.qrY"
+                 @input="cfg.qrEnabled = true; dragTarget='qr';"
+                 class="w-full accent-purple-600" />
+        </div>
+        <div>
+          <label class="flex justify-between text-xs text-gray-600 mb-1">
+            <span>Tamaño</span><span x-text="cfg.qrSize + 'px'" title="Valor real en el PDF"></span>
+          </label>
+          <input type="range" min="40" max="600" step="5" x-model.number="cfg.qrSize"
+                 @input="cfg.qrEnabled = true;"
+                 class="w-full accent-purple-600" />
         </div>
       </div>
     </div>
@@ -215,15 +353,44 @@ function certEditor() {
       fontColor:  '<%= tmpl.font_color %>',
       fontWeight: '<%= tmpl.font_weight %>',
       fontStyle:  '<%= tmpl.font_style %>',
+      qrEnabled:     <%= tmpl.qr_enabled ? 'true' : 'false' %>,
+      qrX:           <%= tmpl.qr_x || 90 %>,
+      qrY:           <%= tmpl.qr_y || 90 %>,
+      qrSize:        <%= tmpl.qr_size || 80 %>,
+      nameUppercase: <%= tmpl.name_uppercase ? 'true' : 'false' %>,
     },
-    dragging: false,
+    // PDF render width in pixels (widthIn × 150 DPI) — denominator for cqw scaling
+    pdfWidthPx: <%= pdfDimensions ? Math.round(pdfDimensions.widthIn * 150) : 1650 %>,
+
+    dragTarget: 'name',  // 'name' | 'qr'
+    activeDrag: null,
     saving: false,
     saved: false,
     saveError: null,
 
     init() {
-      // Watch changes to re-render
       this.$watch('cfg', () => { this.saved = false; });
+      this.loadGoogleFont(this.cfg.fontFamily);
+    },
+
+    loadGoogleFont(fontName) {
+      if (!fontName || !fontName.trim()) return;
+      const systemFonts = <%- JSON.stringify(systemFonts) %>;
+      if (systemFonts.includes(fontName)) return;
+      const id = 'gf-' + fontName.replace(/\s+/g, '-');
+      if (document.getElementById(id)) return;
+      const link = document.createElement('link');
+      link.id   = id;
+      link.rel  = 'stylesheet';
+      const family = fontName.replace(/\s+/g, '+');
+      link.href = `https://fonts.googleapis.com/css2?family=${family}:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,300;1,400;1,500;1,600;1,700;1,800;1,900&display=swap`;
+      document.head.appendChild(link);
+    },
+
+    // Convert a px value (at pdfWidthPx resolution) to cqw units.
+    // 1cqw = 1% of the container's inline (width) size → scales perfectly at any preview size.
+    toCqw(px) {
+      return (px / this.pdfWidthPx) * 100 + 'cqw';
     },
 
     get nameStyle() {
@@ -231,46 +398,59 @@ function certEditor() {
                    : this.cfg.textAlign === 'right'  ? '-100%, -50%'
                    : '0%, -50%';
       return {
-        left:       this.cfg.x + '%',
-        top:        this.cfg.y + '%',
-        transform:  `translate(${anchor})`,
-        fontFamily: this.cfg.fontFamily,
-        fontSize:   this.cfg.fontSize + 'px',
-        color:      this.cfg.fontColor,
-        fontWeight: this.cfg.fontWeight,
-        fontStyle:  this.cfg.fontStyle,
-        textAlign:  this.cfg.textAlign,
-        lineHeight: '1.1',
-        userSelect: 'none',
+        left:          this.cfg.x + '%',
+        top:           this.cfg.y + '%',
+        transform:     `translate(${anchor})`,
+        fontFamily:    this.cfg.fontFamily,
+        color:         this.cfg.fontColor,
+        fontWeight:    this.cfg.fontWeight,
+        fontStyle:     this.cfg.fontStyle,
+        textTransform: this.cfg.nameUppercase ? 'uppercase' : 'none',
+        textAlign:     this.cfg.textAlign,
+        fontSize:      this.toCqw(this.cfg.fontSize),
+        lineHeight:    '1.1',
+        userSelect:    'none',
       };
     },
 
-    onImageLoad() {
-      // Canvas ready
+    get qrStyle() {
+      const sz = this.toCqw(this.cfg.qrSize);
+      return {
+        left:      this.cfg.qrX + '%',
+        top:       this.cfg.qrY + '%',
+        transform: 'translate(-50%, -50%)',
+        width:     sz,
+        height:    sz,
+      };
     },
 
     startDrag(e) {
       if (e.button !== 0) return;
-      this.dragging = true;
+      this.activeDrag = this.cfg.qrEnabled ? this.dragTarget : 'name';
       this.updatePosition(e);
     },
 
     onDrag(e) {
-      if (!this.dragging) return;
+      if (!this.activeDrag) return;
       this.updatePosition(e);
     },
 
     stopDrag() {
-      this.dragging = false;
+      this.activeDrag = null;
     },
 
     updatePosition(e) {
       const canvas = document.getElementById('cert-canvas');
       const rect   = canvas.getBoundingClientRect();
-      const x = ((e.clientX - rect.left) / rect.width)  * 100;
-      const y = ((e.clientY - rect.top)  / rect.height) * 100;
-      this.cfg.x = Math.min(100, Math.max(0, Math.round(x * 10) / 10));
-      this.cfg.y = Math.min(100, Math.max(0, Math.round(y * 10) / 10));
+      const x = Math.min(100, Math.max(0, Math.round(((e.clientX - rect.left) / rect.width)  * 1000) / 10));
+      const y = Math.min(100, Math.max(0, Math.round(((e.clientY - rect.top)  / rect.height) * 1000) / 10));
+      if (this.activeDrag === 'qr') {
+        this.cfg.qrX = x;
+        this.cfg.qrY = y;
+      } else {
+        this.cfg.x = x;
+        this.cfg.y = y;
+      }
     },
 
     async save() {
@@ -286,6 +466,11 @@ function certEditor() {
           font_color:  this.cfg.fontColor,
           font_weight: this.cfg.fontWeight,
           font_style:  this.cfg.fontStyle,
+          qr_enabled:     this.cfg.qrEnabled ? '1' : '',
+          qr_x:           this.cfg.qrX,
+          qr_y:           this.cfg.qrY,
+          qr_size:        this.cfg.qrSize,
+          name_uppercase: this.cfg.nameUppercase ? '1' : '',
         });
         const res = await fetch('/templates/<%= tmpl.id %>/config', {
           method: 'POST',

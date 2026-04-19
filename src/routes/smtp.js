@@ -33,10 +33,12 @@ router.post('/', (req, res) => {
     });
   }
   const password_enc = encrypt(password);
+  const isSecure = secure ? 1 : 0;
+  const finalPort = isSecure ? 465 : (parseInt(port) || 587);
   db.prepare(`
     INSERT INTO smtp_profiles (name, host, port, secure, user, password_enc, from_email, from_name)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(name, host, parseInt(port) || 587, secure ? 1 : 0, user, password_enc, from_email, from_name || '');
+  `).run(name, host, finalPort, isSecure, user, password_enc, from_email, from_name || '');
   res.redirect('/smtp');
 });
 
@@ -47,10 +49,12 @@ router.post('/:id', (req, res) => {
   if (!existing) return res.status(404).render('error', { title: 'Error', message: 'Perfil no encontrado', status: 404 });
 
   const password_enc = password ? encrypt(password) : existing.password_enc;
+  const isSecure = secure ? 1 : 0;
+  const finalPort = isSecure ? 465 : (parseInt(port) || 587);
   db.prepare(`
     UPDATE smtp_profiles SET name=?, host=?, port=?, secure=?, user=?, password_enc=?, from_email=?, from_name=?
     WHERE id=?
-  `).run(name, host, parseInt(port) || 587, secure ? 1 : 0, user, password_enc, from_email, from_name || '', req.params.id);
+  `).run(name, host, finalPort, isSecure, user, password_enc, from_email, from_name || '', req.params.id);
   res.redirect('/smtp');
 });
 

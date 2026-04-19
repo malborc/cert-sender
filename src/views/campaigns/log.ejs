@@ -39,26 +39,48 @@
 <div class="bg-white border border-gray-100 rounded-lg shadow-sm overflow-hidden" x-data="logTable()">
 
   <!-- Toolbar -->
-  <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
-    <div class="flex items-center gap-2">
-      <span class="text-sm text-gray-600 font-medium">
-        <%= totalCount.toLocaleString() %> registros
-        <% if (filterStatus !== 'all') { %><span class="text-indigo-600">(filtro: <%= filterStatus %>)</span><% } %>
-      </span>
-      <% if (filterStatus !== 'all') { %>
-      <a href="?status=all&page=1" class="text-xs text-gray-400 hover:text-gray-600 underline">Quitar filtro</a>
-      <% } %>
+  <div class="px-4 py-3 border-b border-gray-100 flex flex-col gap-2">
+    <div class="flex items-center justify-between gap-3 flex-wrap">
+      <div class="flex items-center gap-2">
+        <span class="text-sm text-gray-600 font-medium">
+          <%= totalCount.toLocaleString() %> registros
+          <% if (filterStatus !== 'all') { %><span class="text-indigo-600">(filtro: <%= filterStatus %>)</span><% } %>
+        </span>
+        <% if (filterStatus !== 'all') { %>
+        <a href="?status=all&page=1" class="text-xs text-gray-400 hover:text-gray-600 underline">Quitar filtro</a>
+        <% } %>
+      </div>
+      <div class="flex items-center gap-2">
+        <button id="bulkResendBtn" onclick="bulkResend()"
+                class="hidden text-xs font-medium px-3 py-1.5 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+          ↺ Reenviar seleccionados (<span id="bulkCount">0</span>)
+        </button>
+        <a href="/attendees/export/<%= campaign.id %>"
+           class="text-xs font-medium px-3 py-1.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
+          Exportar CSV
+        </a>
+      </div>
     </div>
-    <a href="/attendees/export/<%= campaign.id %>"
-       class="text-xs font-medium px-3 py-1.5 bg-gray-100 text-gray-700 rounded hover:bg-gray-200">
-      Exportar CSV
-    </a>
+    <!-- Search -->
+    <div class="relative">
+      <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-400 pointer-events-none"
+           fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z"/>
+      </svg>
+      <input id="searchInput" type="text" placeholder="Buscar por nombre, email o estado…"
+             oninput="filterRows(this.value)"
+             class="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded focus:outline-none focus:ring-1 focus:ring-indigo-400 bg-white">
+    </div>
   </div>
 
   <div class="overflow-x-auto">
     <table class="min-w-full divide-y divide-gray-50">
       <thead class="bg-gray-50">
         <tr>
+          <th class="px-3 py-2.5 w-8">
+            <input type="checkbox" id="masterCheck" onchange="toggleAll(this.checked)"
+                   class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer">
+          </th>
           <th class="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase w-8">#</th>
           <th class="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Nombre</th>
           <th class="px-4 py-2.5 text-left text-xs font-medium text-gray-500 uppercase">Email</th>
@@ -71,7 +93,7 @@
       <tbody class="divide-y divide-gray-50">
         <% if (attendees.length === 0) { %>
         <tr>
-          <td colspan="7" class="px-4 py-10 text-center text-sm text-gray-400">
+          <td colspan="8" class="px-4 py-10 text-center text-sm text-gray-400">
             No hay registros con el filtro seleccionado.
           </td>
         </tr>
@@ -85,9 +107,37 @@
           };
           const offset = (page - 1) * pageSize;
         %>
-        <tr class="hover:bg-gray-50 group" x-data="attendeeRow(<%= a.id %>, `<%= a.email.replace(/`/g, '\\`') %>`, '<%= a.status %>')">
+        <tr class="hover:bg-gray-50 group"
+            data-search="<%= (a.name + ' ' + a.email + ' ' + a.status).toLowerCase() %>"
+            x-data="attendeeRow(<%= a.id %>, `<%= a.name.replace(/`/g, '\\`') %>`, `<%= a.email.replace(/`/g, '\\`') %>`, '<%= a.status %>')">
+          <td class="px-3 py-2.5">
+            <input type="checkbox" class="row-check rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                   data-id="<%= a.id %>" onchange="onRowCheck()">
+          </td>
           <td class="px-4 py-2.5 text-xs text-gray-400"><%= offset + idx + 1 %></td>
-          <td class="px-4 py-2.5 text-sm text-gray-900 max-w-xs truncate" title="<%= a.name %>"><%= a.name %></td>
+
+          <!-- Name (editable inline) -->
+          <td class="px-4 py-2.5 text-sm max-w-xs">
+            <div x-show="!editingName" class="flex items-center gap-1">
+              <span class="text-gray-900 truncate" x-text="name" :title="name"></span>
+              <button @click="editingName = true; newName = name"
+                      class="opacity-0 group-hover:opacity-100 ml-1 text-indigo-400 hover:text-indigo-600 transition-opacity flex-shrink-0"
+                      title="Editar nombre">
+                <svg class="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z" />
+                </svg>
+              </button>
+            </div>
+            <div x-show="editingName" x-cloak class="flex items-center gap-1">
+              <input type="text" x-model="newName"
+                     class="text-xs border border-indigo-300 rounded px-2 py-1 w-48 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                     @keydown.enter="saveName()"
+                     @keydown.escape="editingName = false" />
+              <button @click="saveName()" class="text-xs text-green-600 font-medium hover:text-green-700">✓</button>
+              <button @click="editingName = false" class="text-xs text-gray-400 hover:text-gray-600">✕</button>
+            </div>
+            <div x-show="nameError" x-cloak class="text-xs text-red-500 mt-0.5" x-text="nameError"></div>
+          </td>
 
           <!-- Email (editable inline) -->
           <td class="px-4 py-2.5 text-sm">
@@ -135,12 +185,12 @@
           <td class="px-4 py-2.5 text-right">
             <button @click="resend()"
                     :disabled="resending || currentStatus === 'pending'"
-                    :title="currentStatus === 'pending' ? 'Ya está pendiente de envío' : 'Reenviar certificado'"
-                    class="text-xs font-medium px-2.5 py-1 rounded border transition-colors
+                    :title="currentStatus === 'pending' ? 'Ya está en cola' : `Reenviar a ${email}`"
+                    class="text-xs font-medium px-2.5 py-1 rounded border transition-colors whitespace-nowrap
                            disabled:opacity-40 disabled:cursor-not-allowed
                            border-indigo-200 text-indigo-600 hover:bg-indigo-50">
               <span x-show="!resending">↺ Reenviar</span>
-              <span x-show="resending" x-cloak>Enviando…</span>
+              <span x-show="resending" x-cloak>En cola…</span>
             </button>
           </td>
         </tr>
@@ -174,18 +224,102 @@
 </div>
 
 <script>
+// ── Search filtering ──────────────────────────────────────────────────────────
+function filterRows(query) {
+  const q = query.trim().toLowerCase();
+  const rows = document.querySelectorAll('tbody tr[data-search]');
+  rows.forEach(tr => {
+    const match = !q || tr.dataset.search.includes(q);
+    tr.style.display = match ? '' : 'none';
+    if (!match) {
+      // uncheck hidden rows
+      const cb = tr.querySelector('.row-check');
+      if (cb && cb.checked) { cb.checked = false; onRowCheck(); }
+    }
+  });
+}
+
+// ── Checkbox management ───────────────────────────────────────────────────────
+function getVisibleChecks() {
+  return Array.from(document.querySelectorAll('tbody tr[data-search]:not([style*="display: none"]) .row-check'));
+}
+
+function onRowCheck() {
+  const visible   = getVisibleChecks();
+  const checked   = visible.filter(cb => cb.checked);
+  const master    = document.getElementById('masterCheck');
+  master.indeterminate = checked.length > 0 && checked.length < visible.length;
+  master.checked       = visible.length > 0 && checked.length === visible.length;
+  updateBulkBtn(checked.length);
+}
+
+function toggleAll(checked) {
+  getVisibleChecks().forEach(cb => { cb.checked = checked; });
+  updateBulkBtn(checked ? getVisibleChecks().length : 0);
+}
+
+function updateBulkBtn(n) {
+  const btn = document.getElementById('bulkResendBtn');
+  document.getElementById('bulkCount').textContent = n;
+  btn.classList.toggle('hidden', n === 0);
+}
+
+// ── Bulk resend ───────────────────────────────────────────────────────────────
+async function bulkResend() {
+  const ids = Array.from(document.querySelectorAll('.row-check:checked')).map(cb => parseInt(cb.dataset.id));
+  if (ids.length === 0) return;
+
+  const btn = document.getElementById('bulkResendBtn');
+  btn.disabled = true;
+  btn.textContent = 'Encolando…';
+
+  try {
+    const res  = await fetch('/attendees/bulk-resend', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+      body:    JSON.stringify({ ids }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      // Update status badges for re-enqueued rows via Alpine if possible, or reload
+      document.querySelectorAll('.row-check:checked').forEach(cb => {
+        // find the Alpine component on the parent row and update status
+        const tr = cb.closest('tr');
+        if (tr && tr._x_dataStack) {
+          const comp = tr._x_dataStack[0];
+          if (comp) comp.currentStatus = 'pending';
+        }
+        cb.checked = false;
+      });
+      toggleAll(false);
+      alert(`${data.enqueued} certificado(s) encolados para reenvío.`);
+    } else {
+      alert('Error: ' + (data.error || 'No se pudo encolar el reenvío'));
+    }
+  } catch (e) {
+    alert('Error de red: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    updateBulkBtn(0);
+  }
+}
+
 function logTable() {
   return {};
 }
 
-function attendeeRow(id, initialEmail, initialStatus) {
+function attendeeRow(id, initialName, initialEmail, initialStatus) {
   return {
     id,
+    name:          initialName,
+    newName:       initialName,
+    editingName:   false,
+    nameError:     null,
     email:         initialEmail,
     newEmail:      initialEmail,
-    currentStatus: initialStatus,
     editing:       false,
     emailError:    null,
+    currentStatus: initialStatus,
     resending:     false,
 
     statusClass() {
@@ -198,6 +332,24 @@ function attendeeRow(id, initialEmail, initialStatus) {
       return map[this.currentStatus] || map.pending;
     },
 
+    async saveName() {
+      this.nameError = null;
+      if (!this.newName.trim()) { this.nameError = 'El nombre no puede estar vacío'; return; }
+      const res  = await fetch(`/attendees/${this.id}/update-name`, {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
+        body:    `name=${encodeURIComponent(this.newName.trim())}`,
+      });
+      const data = await res.json();
+      if (data.ok) {
+        this.name        = data.name;
+        this.newName     = data.name;
+        this.editingName = false;
+      } else {
+        this.nameError = data.error;
+      }
+    },
+
     async saveEmail() {
       this.emailError = null;
       const res  = await fetch(`/attendees/${this.id}/update-email`, {
@@ -207,28 +359,24 @@ function attendeeRow(id, initialEmail, initialStatus) {
       });
       const data = await res.json();
       if (data.ok) {
-        this.email   = data.email;
+        this.email    = data.email;
         this.newEmail = data.email;
-        this.editing = false;
+        this.editing  = false;
       } else {
         this.emailError = data.error;
       }
     },
 
     async resend() {
-      if (!confirm(`¿Reenviar certificado a ${this.email}?`)) return;
       this.resending = true;
       try {
-        const res = await fetch(`/attendees/${this.id}/resend`, {
+        const res  = await fetch(`/attendees/${this.id}/resend`, {
           method:  'POST',
           headers: { 'Accept': 'application/json' },
         });
         const data = await res.json();
-        if (data.ok) {
-          this.currentStatus = 'pending';
-        } else {
-          alert('Error: ' + (data.error || 'No se pudo encolar el reenvío'));
-        }
+        if (data.ok) this.currentStatus = 'pending';
+        else alert('Error: ' + (data.error || 'No se pudo encolar el reenvío'));
       } catch (e) {
         alert('Error de red: ' + e.message);
       } finally {

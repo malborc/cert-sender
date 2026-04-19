@@ -42,9 +42,18 @@ const worker = new Worker('cert-email', async (job) => {
   if (!tmpl) throw new Error(`Template ${campaign.template_id} not found`);
   if (!profile) throw new Error(`SMTP profile ${campaign.smtp_profile_id} not found`);
 
+  // Build verify URL — use client's custom domain when configured, fallback to APP_URL
+  const APP_URL  = process.env.APP_URL || 'https://certs.manuelalbor.com';
+  const baseUrl  = (campaign.verify_domain && campaign.verify_domain_status === 'configured')
+    ? `https://${campaign.verify_domain}`
+    : APP_URL;
+  const verifyUrl = campaign.qr_enabled && attendee.verify_token
+    ? `${baseUrl}/verify/${attendee.verify_token}`
+    : null;
+
   // Generate PDF
   console.log(`[worker] Generating PDF for: ${attendee.name} <${attendee.email}>`);
-  const { buffer: pdfBuffer, sizeKb } = await generateCertificate(tmpl, attendee.name);
+  const { buffer: pdfBuffer, sizeKb } = await generateCertificate(tmpl, attendee.name, verifyUrl);
   console.log(`[worker] PDF generated: ${sizeKb} KB`);
 
   // Send email (with PDF attached)

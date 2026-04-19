@@ -11,6 +11,7 @@ services:
       - cert_db:/app/data/db
       - cert_templates:/app/data/templates
       - cert_uploads:/app/data/uploads
+      - cert_logos:/app/data/logos
     env_file: .env
     environment:
       - NODE_ENV=production
@@ -26,10 +27,17 @@ services:
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=proxy_net"
+      # ── Router principal (protegido por Authentik) ──────────────────────────
       - "traefik.http.routers.cert-sender.rule=Host(`certs.manuelalbor.com`)"
       - "traefik.http.routers.cert-sender.entrypoints=web,websecure"
       - "traefik.http.routers.cert-sender.middlewares=authentik@docker"
       - "traefik.http.services.cert-sender.loadbalancer.server.port=3000"
+      # ── Router público /verify — cualquier host, sin Authentik ─────────────
+      # Captura dominios personalizados de clientes (CNAME → tunnel)
+      - "traefik.http.routers.cert-verify-public.rule=PathPrefix(`/verify`)"
+      - "traefik.http.routers.cert-verify-public.entrypoints=web,websecure"
+      - "traefik.http.routers.cert-verify-public.service=cert-sender"
+      - "traefik.http.routers.cert-verify-public.priority=200"
     restart: unless-stopped
 
   cert-sender-worker:
@@ -42,6 +50,7 @@ services:
       - cert_db:/app/data/db
       - cert_templates:/app/data/templates
       - cert_uploads:/app/data/uploads
+      - cert_logos:/app/data/logos
     env_file: .env
     environment:
       - NODE_ENV=production
@@ -78,6 +87,8 @@ volumes:
     name: cert_templates
   cert_uploads:
     name: cert_uploads
+  cert_logos:
+    name: cert_logos
   cert_redis:
     name: cert_redis
 

@@ -1,5 +1,35 @@
 # Changelog
 
+## [1.2.0] — 2026-04-19
+
+### Añadido
+- **Envío de prueba** (`POST /send/:id/test`): desde la tarjeta "Certificado" de cada campaña puedes enviar un email real con el PDF generado a cualquier dirección sin afectar el estado de los asistentes ni la campaña. Permite especificar el nombre a usar (o toma el más largo de la lista).
+- **QR de verificación en certificados**: genera un QR con un token único por asistente que apunta a una URL de verificación pública. Posición y tamaño configurables en el editor de plantillas.
+- **Subdominio de verificación white-label** (`{slug}-certs.manuelalbor.com`): crea un subdominio CNAME en Cloudflare + entrada en el túnel con una sola acción. HTTPS automático via Cloudflare Universal SSL, sin coste adicional. Servicio `cloudflare.js` con `addSubdomain()` / `removeSubdomain()` vía API.
+- **Mayúsculas sostenidas opcionales**: toggle por plantilla para forzar el nombre del asistente en `text-transform: uppercase` tanto en el preview como en el PDF generado.
+- **Edición inline del nombre de campaña**: click en el título para editarlo en sitio, guarda vía AJAX sin recargar la página.
+- **Búsqueda y reenvío masivo en el log**: campo de búsqueda que filtra por nombre, email y estado; checkboxes de selección múltiple con acción de reenvío en lote (`POST /attendees/bulk-resend`).
+- **Importación desacoplada del envío**: importar asistentes ya no inicia los correos. El estado de la campaña se resetea a `draft` para que el usuario decida cuándo presionar "Enviar certificados". Mensaje de confirmación lo deja claro.
+- **Institución avaladora**: campo opcional de nombre de institución + logo (imagen) que se puede adjuntar a cada campaña para referencia interna.
+- **Previsualización CSV antes de importar**: tabla interactiva con selección individual o total de filas antes de confirmar la importación.
+- Edición inline de email del asistente en el log de envíos.
+- Reenvío individual por asistente desde el log.
+
+### Cambiado
+- **Escalado del preview con CSS `cqw`**: sustituye el cálculo JS con `displayScale` por `font-size: N cqw` (`container-type: inline-size`), logrando correspondencia pixel-perfect con el PDF a cualquier tamaño de pantalla sin depender de eventos de imagen.
+- **Detección de DPI del SVG** (`parseSvgDimensions`): nueva heurística que detecta SVGs exportados a 300/200/150/120 DPI (viewBox con valores >1000 sin unidades físicas en `width`/`height`). Resuelve el timeout de Gotenberg en SVGs de alta resolución (p.ej. `viewBox="0 0 3300 2550"` → 11"×8.5" en lugar de 34"×26"). Prioridad: unidades físicas → viewBox con DPI heurístico → px a 96 DPI → Letter landscape por defecto.
+- El botón de inicio de envío muestra un diálogo de confirmación con el número de asistentes pendientes antes de encolar los jobs.
+- Rango del slider de tamaño de fuente ampliado a 300px; tamaño del QR hasta 600px.
+- El nombre del archivo PDF adjunto al email preserva correctamente caracteres especiales del español.
+
+### Corregido
+- Gotenberg devolvía error 503 (timeout) en plantillas SVG exportadas a 300 DPI con `viewBox` grande.
+- La escala del nombre y QR en el preview no coincidía con el PDF exportado.
+- Asistentes importados en campañas en estado `done` o `error` no desbloqueaban el botón de envío.
+- Línea `fontSize` duplicada en `nameStyle` del editor de plantillas causaba valor incorrecto en preview.
+
+---
+
 ## [1.1.0] — 2026-04-18
 
 ### Añadido

@@ -1,9 +1,28 @@
 <%- include('../partials/_head', { title, currentPath }) %>
 
 <div class="mb-5 flex items-start justify-between gap-4 flex-wrap">
-  <div>
+  <div x-data="campaignTitle('<%= campaign.name.replace(/'/g, "\\'") %>', <%= campaign.id %>)">
     <a href="/campaigns" class="text-sm text-gray-500 hover:text-gray-700">← Campañas</a>
-    <h1 class="mt-1 text-2xl font-bold text-gray-900"><%= campaign.name %></h1>
+    <!-- View mode -->
+    <div x-show="!editing" class="flex items-center gap-2 mt-1 group">
+      <h1 class="text-2xl font-bold text-gray-900" x-text="name"></h1>
+      <button @click="startEdit()"
+              class="opacity-0 group-hover:opacity-100 text-gray-400 hover:text-indigo-600 transition-opacity"
+              title="Editar nombre">
+        <svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"/>
+        </svg>
+      </button>
+    </div>
+    <!-- Edit mode -->
+    <div x-show="editing" x-cloak class="flex items-center gap-2 mt-1">
+      <input type="text" x-model="draft" x-ref="input"
+             @keydown.enter="save()"
+             @keydown.escape="cancel()"
+             @blur="save()"
+             class="text-2xl font-bold text-gray-900 border-b-2 border-indigo-400 bg-transparent focus:outline-none w-full max-w-md" />
+    </div>
+    <p x-show="error" x-cloak class="text-xs text-red-500 mt-0.5" x-text="error"></p>
     <p class="text-sm text-gray-500"><%= campaign.event_date || '' %> &nbsp;•&nbsp; Lotes de <%= campaign.batch_size %> c/u cada <%= campaign.batch_interval_min %> min</p>
   </div>
   <!-- Tabs -->
@@ -19,9 +38,10 @@
   </div>
   <div class="flex gap-2 flex-shrink-0">
     <% if (['draft','paused','error'].includes(campaign.status) && stats.pending > 0) { %>
-    <form action="/send/<%= campaign.id %>/start" method="POST">
+    <form action="/send/<%= campaign.id %>/start" method="POST"
+          onsubmit="return confirm('¿Enviar certificados a <%= stats.pending.toLocaleString() %> asistente(s) pendientes?\n\nEsta acción encolará los envíos. Podrás pausarla si es necesario.')">
       <button class="px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-md hover:bg-green-700 shadow-sm">
-        Iniciar envío
+        Enviar certificados
       </button>
     </form>
     <% } %>
@@ -78,24 +98,51 @@
 
 <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
 
-  <!-- CSV Upload -->
-  <div class="bg-white rounded-lg border border-gray-100 shadow-sm p-5">
-    <h2 class="text-sm font-semibold text-gray-700 mb-3">Cargar asistentes (CSV)</h2>
-    <p class="text-xs text-gray-400 mb-3">Columnas requeridas: <code class="bg-gray-100 px-1 rounded">email</code>, <code class="bg-gray-100 px-1 rounded">asistente</code></p>
-    <% if (longestName) { %>
-    <p class="text-xs text-gray-500 mb-3">Nombre más largo: <strong class="text-gray-800"><%= longestName %></strong></p>
-    <% } %>
-    <form id="csv-form" action="/attendees/upload/<%= campaign.id %>" method="POST" enctype="multipart/form-data">
-      <input type="file" name="csv" accept=".csv" required
-             class="w-full text-xs text-gray-600 border border-gray-300 rounded px-2 py-1.5 mb-3 file:mr-2 file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-xs file:font-medium file:rounded file:cursor-pointer" />
-      <button type="submit"
-              class="w-full px-3 py-2 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700">
-        Importar CSV
+  <!-- CSV Upload + Manual add -->
+  <div class="bg-white rounded-lg border border-gray-100 shadow-sm p-5" id="csv-manager">
+    <h2 class="text-sm font-semibold text-gray-700 mb-1">Asistentes</h2>
+    <p class="text-xs text-gray-400 mb-1">Columnas CSV: <code class="bg-gray-100 px-1 rounded">email</code>, <code class="bg-gray-100 px-1 rounded">asistente</code></p>
+    <a href="/attendees/sample-csv" download="asistentes-ejemplo.csv"
+       class="inline-flex items-center gap-1 text-xs text-indigo-500 hover:text-indigo-700 hover:underline mb-3">
+      ↓ CSV de ejemplo
+    </a>
+
+    <!-- File picker -->
+    <div class="mb-3">
+      <input type="file" id="csv-file-input" accept=".csv"
+             class="w-full text-xs text-gray-600 border border-gray-300 rounded px-2 py-1.5 file:mr-2 file:border-0 file:bg-indigo-50 file:text-indigo-700 file:text-xs file:font-medium file:rounded file:cursor-pointer" />
+    </div>
+    <button id="csv-parse-btn"
+            class="w-full px-3 py-2 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 disabled:opacity-60">
+      Previsualizar CSV
+    </button>
+    <div id="csv-error" class="mt-2 text-xs text-red-600 hidden"></div>
+
+    <!-- Divider -->
+    <div class="my-4 border-t border-gray-100"></div>
+
+    <!-- Add manually -->
+    <button id="manual-toggle"
+            class="w-full text-left text-xs font-medium text-gray-600 hover:text-indigo-600 flex items-center justify-between">
+      <span>+ Añadir asistente manualmente</span>
+      <span id="manual-arrow">▸</span>
+    </button>
+    <div id="manual-form" class="hidden mt-3 space-y-2">
+      <input type="text" id="manual-name" placeholder="Nombre completo"
+             class="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <input type="email" id="manual-email" placeholder="email@ejemplo.com"
+             class="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+      <button id="manual-add-btn"
+              class="w-full px-3 py-1.5 bg-gray-700 text-white text-xs font-medium rounded hover:bg-gray-800">
+        Agregar
       </button>
-    </form>
+      <div id="manual-result" class="text-xs hidden"></div>
+    </div>
+
+    <!-- Clear pending -->
     <% if (stats.pending > 0) { %>
     <form action="/attendees/clear/<%= campaign.id %>" method="POST"
-          onsubmit="return confirm('¿Eliminar asistentes pendientes?')" class="mt-2">
+          onsubmit="return confirm('¿Eliminar asistentes pendientes?')" class="mt-4">
       <button class="w-full px-3 py-1.5 bg-red-50 text-red-600 text-xs font-medium rounded hover:bg-red-100">
         Limpiar pendientes
       </button>
@@ -121,6 +168,31 @@
         </a>
         <% } %>
       </div>
+
+      <!-- Test send -->
+      <div class="mt-3 border-t border-gray-100 pt-3" x-data="testSend(<%= campaign.id %>)">
+        <button @click="open = !open"
+                class="w-full text-left text-xs font-medium text-gray-600 hover:text-indigo-600 flex items-center justify-between">
+          <span>Envío de prueba</span>
+          <span x-text="open ? '▾' : '▸'" class="text-gray-400"></span>
+        </button>
+        <div x-show="open" x-cloak class="mt-2 space-y-2">
+          <input type="email" x-model="email" placeholder="tu@email.com"
+                 class="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          <input type="text" x-model="name"
+                 placeholder="<%= longestName ? longestName.replace(/"/g, '&quot;') : 'Nombre Asistente' %>"
+                 class="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-indigo-400" />
+          <p class="text-xs text-gray-400">Deja el nombre vacío para usar el nombre más largo de la lista.</p>
+          <button @click="send()"
+                  :disabled="sending"
+                  class="w-full px-3 py-1.5 bg-indigo-600 text-white text-xs font-medium rounded hover:bg-indigo-700 disabled:opacity-60">
+            <span x-text="sending ? 'Enviando…' : 'Enviar prueba'"></span>
+          </button>
+          <p x-show="result" x-cloak
+             :class="ok ? 'text-green-700 bg-green-50' : 'text-red-700 bg-red-50'"
+             class="text-xs px-2 py-1.5 rounded" x-text="result"></p>
+        </div>
+      </div>
     <% } else { %>
       <p class="text-xs text-amber-600">Sin plantilla asignada. <a href="/templates/new" class="underline">Sube una</a> y edita la campaña.</p>
     <% } %>
@@ -135,8 +207,20 @@
       <div class="flex justify-between"><dt class="text-gray-500">Asunto</dt><dd class="text-gray-800 truncate max-w-36"><%= campaign.email_subject %></dd></div>
       <div class="flex justify-between"><dt class="text-gray-500">Lote</dt><dd class="text-gray-800"><%= campaign.batch_size %> emails</dd></div>
       <div class="flex justify-between"><dt class="text-gray-500">Intervalo</dt><dd class="text-gray-800"><%= campaign.batch_interval_min %> min</dd></div>
+      <div class="flex justify-between"><dt class="text-gray-500">QR de verificación</dt>
+        <dd class="font-medium <%= campaign.qr_enabled ? 'text-purple-600' : 'text-gray-400' %>">
+          <%= campaign.qr_enabled ? 'Activado' : 'Desactivado' %>
+        </dd>
+      </div>
+      <% if (campaign.institution_name) { %>
+      <div class="flex justify-between items-center">
+        <dt class="text-gray-500">Institución</dt>
+        <dd class="font-medium text-gray-800 truncate max-w-36"><%= campaign.institution_name %></dd>
+      </div>
+      <% } %>
     </dl>
-    <form action="/campaigns/<%= campaign.id %>" method="POST" class="mt-4 space-y-2">
+    <form action="/campaigns/<%= campaign.id %>" method="POST"
+          enctype="multipart/form-data" class="mt-4 space-y-2">
       <input type="hidden" name="name" value="<%= campaign.name %>" />
       <input type="hidden" name="event_date" value="<%= campaign.event_date || '' %>" />
       <input type="hidden" name="email_subject" value="<%= campaign.email_subject %>" />
@@ -165,6 +249,117 @@
         <option value="<%= t.id %>" <%= campaign.template_id == t.id ? 'selected' : '' %>><%= t.name %></option>
         <% }); %>
       </select>
+
+      <!-- QR verification toggle -->
+      <label class="flex items-center justify-between py-2 px-3 bg-gray-50 rounded border border-gray-200 cursor-pointer select-none">
+        <div>
+          <span class="text-xs font-medium text-gray-700">QR de verificación</span>
+          <p class="text-xs text-gray-400 mt-0.5">Incluye un QR en el certificado para validarlo online</p>
+        </div>
+        <input type="checkbox" name="qr_enabled" value="1"
+               <%= campaign.qr_enabled ? 'checked' : '' %>
+               class="w-4 h-4 accent-purple-600 flex-shrink-0 ml-3" />
+      </label>
+      <% if (campaign.qr_enabled && !campaign.template_id) { %>
+      <p class="text-xs text-amber-600">Asigna una plantilla para configurar la posición del QR.</p>
+      <% } else if (campaign.qr_enabled && campaign.template_id) { %>
+      <a href="/templates/<%= campaign.template_id %>/edit"
+         class="block text-center text-xs text-purple-600 hover:underline">
+        Ajustar posición del QR en la plantilla →
+      </a>
+      <% } %>
+
+      <!-- Subdominio de verificación -->
+      <% if (campaign.qr_enabled) { %>
+      <div class="border-t border-gray-100 pt-3 space-y-2">
+        <p class="text-xs font-medium text-gray-700">Subdominio de verificación
+          <span class="text-gray-400 font-normal">— white-label</span>
+        </p>
+
+        <% if (campaign.verify_domain && campaign.verify_domain_status === 'configured') { %>
+        <!-- ✓ Configurado -->
+        <div class="p-2.5 bg-green-50 rounded-lg border border-green-200 space-y-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="flex items-center gap-1 text-xs font-medium text-green-800">
+              <svg class="w-3.5 h-3.5 text-green-600 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M4.5 12.75l6 6 9-13.5"/>
+              </svg>
+              <%= campaign.verify_domain %>
+            </span>
+            <button type="button" onclick="removeDomain(<%= campaign.id %>)"
+                    class="text-xs text-red-400 hover:text-red-600 flex-shrink-0">Eliminar</button>
+          </div>
+          <p class="text-xs text-green-700">
+            Los QR apuntarán a
+            <span class="font-mono font-medium">https://<%= campaign.verify_domain %>/verify/…</span>
+          </p>
+        </div>
+
+        <% } else if (campaign.verify_domain && campaign.verify_domain_status === 'pending') { %>
+        <!-- ⏳ Pendiente — esperando que Cloudflare emita el certificado -->
+        <div class="p-2.5 bg-amber-50 rounded-lg border border-amber-200 space-y-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs font-medium text-amber-800">⏳ Provisionando certificado…</span>
+            <button type="button" onclick="location.reload()"
+                    class="text-xs text-gray-500 hover:text-gray-700">Verificar</button>
+          </div>
+          <p class="text-xs text-amber-700 font-mono"><%= campaign.verify_domain %></p>
+          <p class="text-xs text-amber-600">Cloudflare tarda 1-2 minutos en emitir el certificado SSL. Recarga para verificar.</p>
+        </div>
+
+        <% } else { %>
+        <!-- No configurado -->
+        <div class="space-y-1.5">
+          <div class="flex gap-1.5 items-center flex-wrap">
+            <input type="text" id="slug-input-<%= campaign.id %>"
+                   placeholder="svcardiologia"
+                   oninput="previewSlug(<%= campaign.id %>, this.value)"
+                   class="border border-gray-300 rounded px-2 py-1.5 text-xs font-mono w-36 focus:outline-none focus:ring-2 focus:ring-purple-400" />
+            <span class="text-xs text-gray-400 font-mono whitespace-nowrap">-certs.manuelalbor.com</span>
+            <button type="button" onclick="configureDomain(<%= campaign.id %>)"
+                    class="px-2.5 py-1.5 bg-purple-600 text-white text-xs font-medium rounded hover:bg-purple-700 whitespace-nowrap flex-shrink-0">
+              Guardar
+            </button>
+          </div>
+          <p id="domain-preview-<%= campaign.id %>" class="text-xs text-indigo-500 font-mono hidden"></p>
+          <p id="domain-msg-<%= campaign.id %>" class="text-xs hidden"></p>
+          <p class="text-xs text-gray-400">Slug único para esta campaña. La URL de verificación quedará en ese subdominio de manuelalbor.com.</p>
+        </div>
+        <% } %>
+      </div>
+      <% } %>
+
+      <!-- Institution -->
+      <div class="border-t border-gray-100 pt-3 mt-1 space-y-2">
+        <p class="text-xs font-medium text-gray-600">Institución avaladora <span class="text-gray-400 font-normal">(opcional)</span></p>
+
+        <input type="text" name="institution_name"
+               value="<%= campaign.institution_name || '' %>"
+               placeholder="Ej: Sociedad Venezolana de Cardiología"
+               class="w-full border border-gray-300 rounded px-2 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-purple-400" />
+
+        <% if (campaign.institution_logo) { %>
+        <!-- Current logo preview -->
+        <div class="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-200">
+          <img src="/campaigns/<%= campaign.id %>/logo" alt="Logo actual"
+               class="h-10 w-auto object-contain rounded" />
+          <div class="flex-1 min-w-0">
+            <p class="text-xs text-gray-600 truncate">Logo actual</p>
+            <label class="flex items-center gap-1 mt-1 cursor-pointer">
+              <input type="checkbox" name="remove_logo" value="1" class="w-3 h-3 accent-red-500" />
+              <span class="text-xs text-red-500">Eliminar logo</span>
+            </label>
+          </div>
+        </div>
+        <label class="block text-xs text-gray-500">Reemplazar logo</label>
+        <% } else { %>
+        <label class="block text-xs text-gray-500">Logo de la institución</label>
+        <% } %>
+        <input type="file" name="institution_logo" accept="image/*"
+               class="w-full text-xs text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-purple-50 file:text-purple-700 hover:file:bg-purple-100 cursor-pointer" />
+        <p class="text-xs text-gray-400">PNG, SVG o JPG recomendado. Máx 5 MB.</p>
+      </div>
+
       <button class="w-full px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-medium rounded hover:bg-gray-200">
         Actualizar config
       </button>
@@ -214,11 +409,393 @@
 </div>
 <% } %>
 
+<!-- CSV Preview panel (full-width, hidden until file is parsed) -->
+<div id="csv-preview-section" class="hidden mt-5 bg-white rounded-lg border border-indigo-100 shadow-sm">
+  <div class="px-5 py-3 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+    <div>
+      <h2 class="text-sm font-semibold text-gray-700">Previsualización del CSV</h2>
+      <p class="text-xs text-gray-400 mt-0.5">
+        <span id="preview-count">0</span> asistentes —
+        <span id="preview-selected">0</span> seleccionados
+      </p>
+    </div>
+    <div class="flex gap-2">
+      <button id="preview-select-all"
+              class="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded hover:bg-gray-50">
+        Seleccionar todos
+      </button>
+      <button id="preview-deselect-all"
+              class="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded hover:bg-gray-50">
+        Deseleccionar todos
+      </button>
+      <button id="preview-cancel"
+              class="px-3 py-1.5 text-xs font-medium border border-gray-300 rounded hover:bg-gray-50 text-gray-500">
+        Cancelar
+      </button>
+      <button id="preview-import-btn"
+              class="px-4 py-1.5 text-xs font-semibold bg-indigo-600 text-white rounded hover:bg-indigo-700">
+        Importar seleccionados
+      </button>
+    </div>
+  </div>
+  <div class="overflow-x-auto" style="max-height: 420px; overflow-y: auto;">
+    <table class="min-w-full text-xs">
+      <thead class="bg-gray-50 sticky top-0">
+        <tr>
+          <th class="w-10 px-3 py-2 text-center">
+            <input type="checkbox" id="preview-master-check" class="rounded" />
+          </th>
+          <th class="px-3 py-2 text-left font-medium text-gray-500">#</th>
+          <th class="px-3 py-2 text-left font-medium text-gray-500">Nombre</th>
+          <th class="px-3 py-2 text-left font-medium text-gray-500">Email</th>
+        </tr>
+      </thead>
+      <tbody id="preview-tbody" class="divide-y divide-gray-50"></tbody>
+    </table>
+  </div>
+  <div id="preview-import-result" class="hidden px-5 py-3 text-sm"></div>
+</div>
+
+<!-- Time estimate (shown above send button if pending > 0) -->
+<% if (stats.pending > 0 && ['draft','paused','error'].includes(campaign.status)) { %>
+<div id="time-estimate-box" class="mt-5 bg-amber-50 border border-amber-100 rounded-lg px-5 py-4">
+  <div class="flex items-start justify-between gap-4">
+    <div>
+      <p class="text-xs font-semibold text-amber-800 mb-1">Estimación de tiempo de envío</p>
+      <p id="estimate-text" class="text-xs text-amber-700">Calculando…</p>
+    </div>
+    <button onclick="fetchEstimate()" class="text-xs text-amber-600 hover:text-amber-800 underline flex-shrink-0">
+      Recalcular
+    </button>
+  </div>
+</div>
+<% } %>
+
 <!-- Auto-refresh when sending -->
 <% if (campaign.status === 'sending') { %>
-<script>
-  setTimeout(() => location.reload(), 10000);
-</script>
+<script>setTimeout(() => location.reload(), 10000);</script>
 <% } %>
+
+<script>
+(function () {
+  const CAMPAIGN_ID = '<%= campaign.id %>';
+
+  // ── CSV Parse & Preview ────────────────────────────────────────────────
+  let parsedAttendees = [];
+
+  function updateSelectedCount() {
+    const total    = parsedAttendees.length;
+    const selected = parsedAttendees.filter(a => a.selected).length;
+    document.getElementById('preview-count').textContent    = total;
+    document.getElementById('preview-selected').textContent = selected;
+    const master = document.getElementById('preview-master-check');
+    master.indeterminate = selected > 0 && selected < total;
+    master.checked = selected === total && total > 0;
+  }
+
+  function renderPreviewTable() {
+    const tbody = document.getElementById('preview-tbody');
+    tbody.innerHTML = '';
+    parsedAttendees.forEach((a, i) => {
+      const tr = document.createElement('tr');
+      tr.className = 'hover:bg-gray-50';
+      tr.innerHTML = `
+        <td class="px-3 py-1.5 text-center">
+          <input type="checkbox" class="row-check rounded" data-idx="${i}" ${a.selected ? 'checked' : ''} />
+        </td>
+        <td class="px-3 py-1.5 text-gray-400">${i + 1}</td>
+        <td class="px-3 py-1.5 text-gray-900">${escHtml(a.name)}</td>
+        <td class="px-3 py-1.5 text-gray-500">${escHtml(a.email)}</td>
+      `;
+      tbody.appendChild(tr);
+    });
+    tbody.addEventListener('change', e => {
+      if (e.target.classList.contains('row-check')) {
+        parsedAttendees[parseInt(e.target.dataset.idx)].selected = e.target.checked;
+        updateSelectedCount();
+      }
+    });
+    updateSelectedCount();
+  }
+
+  function escHtml(s) {
+    return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  }
+
+  function showError(msg) {
+    const el = document.getElementById('csv-error');
+    el.textContent = msg;
+    el.classList.remove('hidden');
+  }
+
+  document.getElementById('csv-parse-btn').addEventListener('click', async () => {
+    const file = document.getElementById('csv-file-input').files[0];
+    if (!file) { showError('Selecciona un archivo CSV primero'); return; }
+    document.getElementById('csv-error').classList.add('hidden');
+    const btn = document.getElementById('csv-parse-btn');
+    btn.textContent = 'Procesando…'; btn.disabled = true;
+    const fd = new FormData(); fd.append('csv', file);
+    try {
+      const res  = await fetch(`/attendees/parse-csv/${CAMPAIGN_ID}`, { method: 'POST', body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Error al leer el CSV');
+      parsedAttendees = data.attendees.map(a => ({ ...a, selected: true }));
+      renderPreviewTable();
+      document.getElementById('csv-preview-section').classList.remove('hidden');
+      document.getElementById('csv-preview-section').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (data.errors && data.errors.length) showError('Advertencias: ' + data.errors.join(' | '));
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      btn.textContent = 'Previsualizar CSV'; btn.disabled = false;
+    }
+  });
+
+  document.getElementById('preview-select-all').addEventListener('click', () => {
+    parsedAttendees.forEach(a => a.selected = true);
+    document.querySelectorAll('.row-check').forEach(c => c.checked = true);
+    updateSelectedCount();
+  });
+
+  document.getElementById('preview-deselect-all').addEventListener('click', () => {
+    parsedAttendees.forEach(a => a.selected = false);
+    document.querySelectorAll('.row-check').forEach(c => c.checked = false);
+    updateSelectedCount();
+  });
+
+  document.getElementById('preview-master-check').addEventListener('change', e => {
+    parsedAttendees.forEach(a => a.selected = e.target.checked);
+    document.querySelectorAll('.row-check').forEach(c => c.checked = e.target.checked);
+    updateSelectedCount();
+  });
+
+  document.getElementById('preview-cancel').addEventListener('click', () => {
+    document.getElementById('csv-preview-section').classList.add('hidden');
+    document.getElementById('csv-file-input').value = '';
+    parsedAttendees = [];
+  });
+
+  document.getElementById('preview-import-btn').addEventListener('click', async () => {
+    const selected = parsedAttendees.filter(a => a.selected);
+    if (!selected.length) { alert('Selecciona al menos un asistente'); return; }
+    const btn = document.getElementById('preview-import-btn');
+    btn.textContent = 'Importando…'; btn.disabled = true;
+    try {
+      const res  = await fetch(`/attendees/import/${CAMPAIGN_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ attendees: selected }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      const resultEl = document.getElementById('preview-import-result');
+      resultEl.className = 'px-5 py-3 text-sm text-green-700 bg-green-50';
+      resultEl.textContent = `✓ ${data.inserted} asistente(s) importados. Ningún correo ha sido enviado — usa el botón "Enviar certificados" cuando estés listo.`;
+      resultEl.classList.remove('hidden');
+      setTimeout(() => location.reload(), 2500);
+    } catch (e) {
+      alert('Error: ' + e.message);
+      btn.textContent = 'Importar seleccionados'; btn.disabled = false;
+    }
+  });
+
+  // ── Manual add ────────────────────────────────────────────────────────
+  document.getElementById('manual-toggle').addEventListener('click', () => {
+    const form  = document.getElementById('manual-form');
+    const arrow = document.getElementById('manual-arrow');
+    const open  = form.classList.toggle('hidden');
+    arrow.textContent = open ? '▸' : '▾';
+  });
+
+  document.getElementById('manual-add-btn').addEventListener('click', async () => {
+    const name  = document.getElementById('manual-name').value.trim();
+    const email = document.getElementById('manual-email').value.trim();
+    const result = document.getElementById('manual-result');
+    if (!name || !email) { result.textContent = 'Completa nombre y email'; result.className = 'text-xs text-red-600'; result.classList.remove('hidden'); return; }
+    const btn = document.getElementById('manual-add-btn');
+    btn.textContent = 'Agregando…'; btn.disabled = true;
+    try {
+      const res  = await fetch(`/attendees/add/${CAMPAIGN_ID}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name, email }),
+      });
+      const data = await res.json();
+      result.classList.remove('hidden');
+      if (data.ok) {
+        result.className = 'text-xs text-green-600';
+        result.textContent = '✓ Asistente agregado';
+        document.getElementById('manual-name').value  = '';
+        document.getElementById('manual-email').value = '';
+        setTimeout(() => location.reload(), 1000);
+      } else {
+        result.className = 'text-xs text-red-600';
+        result.textContent = data.error;
+      }
+    } finally {
+      btn.textContent = 'Agregar'; btn.disabled = false;
+    }
+  });
+
+  // ── Time estimate ─────────────────────────────────────────────────────
+  async function fetchEstimate() {
+    const box = document.getElementById('time-estimate-box');
+    if (!box) return;
+    const el = document.getElementById('estimate-text');
+    el.textContent = 'Calculando…';
+    try {
+      const res  = await fetch(`/send/${CAMPAIGN_ID}/time-estimate`);
+      const data = await res.json();
+      let msg = `${data.pending} pendientes · ${data.batches} lote(s) de ${data.batchSize} · intervalo ${data.intervalMin} min → <strong>${data.thisEstimate}</strong>`;
+      if (data.otherCampaigns > 0) {
+        msg += ` <span class="text-amber-500">(+ ${data.otherEstimate || data.otherMinutes + ' min'} de otras ${data.otherCampaigns} campaña(s) en cola → total <strong>${data.totalEstimate}</strong>)</span>`;
+      }
+      el.innerHTML = msg;
+    } catch { el.textContent = 'No se pudo calcular'; }
+  }
+  fetchEstimate();
+}());
+</script>
+
+<script>
+// ── Subdominio de verificación ─────────────────────────────────────────────
+function previewSlug(campaignId, value) {
+  const slug    = value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+  const preview = document.getElementById('domain-preview-' + campaignId);
+  if (slug.length >= 2) {
+    preview.textContent = 'https://' + slug + '-certs.manuelalbor.com/verify/…';
+    preview.classList.remove('hidden');
+  } else {
+    preview.classList.add('hidden');
+  }
+}
+
+async function configureDomain(campaignId) {
+  const input = document.getElementById('slug-input-' + campaignId);
+  const msg   = document.getElementById('domain-msg-' + campaignId);
+  const slug  = input.value.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
+
+  if (!slug || slug.length < 2) {
+    showDomainMsg(msg, 'El slug debe tener al menos 2 caracteres', 'red');
+    return;
+  }
+
+  input.disabled = true;
+  try {
+    const res  = await fetch('/campaigns/' + campaignId + '/domain', {
+      method:  'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body:    JSON.stringify({ slug }),
+    });
+    const data = await res.json();
+    if (data.ok) {
+      location.reload();
+    } else {
+      showDomainMsg(msg, 'Error: ' + data.error, 'red');
+      input.disabled = false;
+    }
+  } catch {
+    showDomainMsg(msg, 'Error de conexión', 'red');
+    input.disabled = false;
+  }
+}
+
+async function removeDomain(campaignId) {
+  if (!confirm('¿Eliminar el subdominio de esta campaña?')) return;
+  const res  = await fetch('/campaigns/' + campaignId + '/domain', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body:    JSON.stringify({ action: 'remove' }),
+  });
+  const data = await res.json();
+  if (data.ok) location.reload();
+  else alert('Error: ' + data.error);
+}
+
+function showDomainMsg(el, text, color) {
+  el.textContent = text;
+  el.className   = 'text-xs ' + (color === 'red' ? 'text-red-500' : 'text-green-600');
+  el.classList.remove('hidden');
+}
+
+function testSend(campaignId) {
+  return {
+    open:    false,
+    email:   '',
+    name:    '',
+    sending: false,
+    result:  '',
+    ok:      false,
+    async send() {
+      if (!this.email.trim()) { this.result = 'Ingresa un email'; this.ok = false; return; }
+      this.sending = true;
+      this.result  = '';
+      try {
+        const res  = await fetch(`/send/${campaignId}/test`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ email: this.email.trim(), name: this.name.trim() }),
+        });
+        const data = await res.json();
+        this.ok     = data.ok;
+        this.result = data.ok
+          ? `✓ Enviado a ${this.email.trim()} con el nombre "${data.name}" (${data.sizeKb} KB)`
+          : `Error: ${data.error}`;
+      } catch (e) {
+        this.ok     = false;
+        this.result = 'Error de conexión';
+      } finally {
+        this.sending = false;
+      }
+    },
+  };
+}
+
+function campaignTitle(initialName, campaignId) {
+  return {
+    name:    initialName,
+    draft:   initialName,
+    editing: false,
+    error:   null,
+
+    startEdit() {
+      this.draft   = this.name;
+      this.editing = true;
+      this.$nextTick(() => this.$refs.input.select());
+    },
+
+    cancel() {
+      this.editing = false;
+      this.error   = null;
+    },
+
+    async save() {
+      if (!this.editing) return;
+      this.editing = false;
+      const trimmed = this.draft.trim();
+      if (!trimmed || trimmed === this.name) return;
+      try {
+        const res  = await fetch(`/campaigns/${campaignId}/rename`, {
+          method:  'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body:    JSON.stringify({ name: trimmed }),
+        });
+        const data = await res.json();
+        if (data.ok) {
+          this.name  = data.name;
+          document.title = data.name;
+          this.error = null;
+        } else {
+          this.error   = data.error;
+          this.editing = true;
+        }
+      } catch {
+        this.error   = 'Error de conexión';
+        this.editing = true;
+      }
+    },
+  };
+}
+</script>
 
 <%- include('../partials/_foot') %>

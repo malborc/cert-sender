@@ -27,18 +27,22 @@
                class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
       </div>
       <div>
-        <label class="block text-sm font-medium text-gray-700 mb-1">Puerto</label>
-        <input type="number" name="port" value="<%= profile?.port || 587 %>"
-               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+        <label class="block text-sm font-medium text-gray-700 mb-1">Puerto <span class="text-xs font-normal text-gray-400">(default 587)</span></label>
+        <input type="number" name="port" id="smtp-port" value="<%= profile?.port || 587 %>" placeholder="587"
+               class="w-full border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-colors" />
       </div>
     </div>
 
-    <div class="mb-4">
+    <div class="mb-1">
       <label class="flex items-center gap-2 cursor-pointer">
-        <input type="checkbox" name="secure" value="1" <%= profile?.secure ? 'checked' : '' %>
+        <input type="checkbox" name="secure" id="smtp-secure" value="1" <%= profile?.secure ? 'checked' : '' %>
                class="rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
-        <span class="text-sm text-gray-700">Usar SSL/TLS (puerto 465)</span>
+        <span class="text-sm text-gray-700">Usar SSL/TLS directo</span>
       </label>
+    </div>
+    <div class="mb-4 text-xs text-gray-400 pl-5" id="smtp-hint">
+      <span id="smtp-hint-starttls">Puerto configurable · STARTTLS (recomendado para Gmail, Outlook, Brevo)</span>
+      <span id="smtp-hint-ssl" style="display:none">Puerto 465 fijo · SSL/TLS directo</span>
     </div>
 
     <div class="mb-4">
@@ -79,5 +83,35 @@
     </button>
   </form>
 </div>
+
+<script>
+(function () {
+  var secureBox = document.getElementById('smtp-secure');
+  var portInput = document.getElementById('smtp-port');
+  var hintSTARTTLS = document.getElementById('smtp-hint-starttls');
+  var hintSSL = document.getElementById('smtp-hint-ssl');
+  var prevPort = (portInput.value == 465) ? 587 : portInput.value;
+
+  function applyState() {
+    if (secureBox.checked) {
+      prevPort = (portInput.value == 465) ? 587 : portInput.value;
+      portInput.value = 465;
+      portInput.readOnly = true;
+      portInput.classList.add('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+      hintSTARTTLS.style.display = 'none';
+      hintSSL.style.display = '';
+    } else {
+      portInput.value = prevPort;
+      portInput.readOnly = false;
+      portInput.classList.remove('bg-gray-100', 'text-gray-400', 'cursor-not-allowed');
+      hintSTARTTLS.style.display = '';
+      hintSSL.style.display = 'none';
+    }
+  }
+
+  secureBox.addEventListener('change', applyState);
+  applyState(); // set initial state on page load
+}());
+</script>
 
 <%- include('../partials/_foot') %>

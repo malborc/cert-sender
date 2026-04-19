@@ -5,7 +5,7 @@ const multer   = require('multer');
 const path     = require('path');
 const fs       = require('fs');
 const db       = require('../db/index');
-const { parseSvgDimensions, estimatePdfSize } = require('../services/pdf');
+const { parseSvgDimensions, estimatePdfSize, SYSTEM_FONTS } = require('../services/pdf');
 
 const router   = express.Router();
 const TMPL_DIR = path.join(__dirname, '../../data/templates');
@@ -83,7 +83,31 @@ router.get('/:id/edit', (req, res) => {
     previewName,
     pdfEstimate,
     pdfDimensions,
+    systemFonts: [...SYSTEM_FONTS],
   });
+});
+
+// GET /templates/:id/preview-pdf — generate PDF preview with the longest attendee name
+router.get('/:id/preview-pdf', async (req, res, next) => {
+  try {
+    const tmpl = db.prepare('SELECT * FROM templates WHERE id = ?').get(req.params.id);
+    if (!tmpl) return res.status(404).send('Plantilla no encontrada');
+
+    const longestRow = db.prepare('SELECT name FROM attendees ORDER BY LENGTH(name) DESC LIMIT 1').get();
+    const previewName = longestRow ? longestRow.name : 'Nombre de Asistente de Ejemplo';
+
+    const { generateCertificate } = require('../services/pdf');
+    const APP_URL   = process.env.APP_URL || 'https://certs.manuelalbor.com';
+    const verifyUrl = tmpl.qr_enabled ? `${APP_URL}/verify/preview-sample` : null;
+    const { buffer, sizeKb } = await generateCertificate(tmpl, previewName, verifyUrl);
+
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', 'inline; filename="preview-certificado.pdf"');
+    res.setHeader('X-PDF-Size-KB', String(sizeKb));
+    res.send(buffer);
+  } catch (err) {
+    next(err);
+  }
 });
 
 // GET /templates/:id/svg — serve the raw SVG file
@@ -98,14 +122,19 @@ router.get('/:id/svg', (req, res) => {
 
 // PUT /templates/:id — save positioning config
 router.post('/:id/config', (req, res) => {
-  const { text_x, text_y, text_align, font_family, font_size, font_color, font_weight, font_style } = req.body;
+  const { text_x, text_y, text_align, font_family, font_size, font_color, font_weight, font_style,
+          qr_enabled, qr_x, qr_y, qr_size, name_uppercase } = req.body;
   db.prepare(`
     UPDATE templates SET
       text_x = ?, text_y = ?, text_align = ?,
       font_family = ?, font_size = ?, font_color = ?,
-      font_weight = ?, font_style = ?
+      font_weight = ?, font_style = ?,
+      qr_enabled = ?, qr_x = ?, qr_y = ?, qr_size = ?,
+      name_uppercase = ?
     WHERE id = ?
-  `).run(text_x, text_y, text_align, font_family, font_size, font_color, font_weight, font_style, req.params.id);
+  `).run(text_x, text_y, text_align, font_family, font_size, font_color, font_weight, font_style,
+         qr_enabled ? 1 : 0, qr_x || 90, qr_y || 90, qr_size || 80,
+         name_uppercase ? 1 : 0, req.params.id);
 
   if (req.accepts('json')) return res.json({ ok: true });
   res.redirect(`/templates/${req.params.id}/edit`);

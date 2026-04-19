@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-gray-50">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= title %></title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="h-full flex items-center justify-center p-4">
+  <div class="max-w-md w-full">
+
+    <% if (!attendee) { %>
+    <!-- ── Not found ─────────────────────────────────── -->
+    <div class="bg-white rounded-2xl shadow-sm border border-red-100 p-8 text-center">
+      <div class="w-16 h-16 rounded-full bg-red-50 flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8 text-red-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126z" />
+        </svg>
+      </div>
+      <h1 class="text-xl font-bold text-gray-800 mb-2">Certificado no encontrado</h1>
+      <p class="text-sm text-gray-500">El código QR no corresponde a ningún certificado en nuestro sistema.</p>
+    </div>
+
+    <% } else if (institution) { %>
+    <!-- ── Institutional verification ───────────────── -->
+
+    <% if (!valid) { %>
+    <!-- Pending with institution -->
+    <div class="bg-white rounded-2xl shadow-sm border border-amber-100 overflow-hidden">
+
+      <!-- Institution header -->
+      <div class="bg-amber-50 border-b border-amber-100 px-6 pt-8 pb-6 text-center">
+        <% if (institution.logoDataUrl) { %>
+        <img src="<%= institution.logoDataUrl %>" alt=""
+             class="h-16 w-auto object-contain mx-auto mb-3 opacity-70" />
+        <% } %>
+        <p class="text-xs font-semibold text-amber-600 uppercase tracking-widest"><%= institution.name %></p>
+      </div>
+
+      <!-- Content -->
+      <div class="p-6 text-center">
+        <div class="w-12 h-12 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+          <svg class="w-6 h-6 text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </div>
+        <h1 class="text-lg font-bold text-gray-800 mb-1">Certificado pendiente</h1>
+        <p class="text-sm text-gray-500 mb-5">Este certificado aún no ha sido emitido oficialmente.</p>
+        <dl class="text-left space-y-2 text-sm bg-gray-50 rounded-xl p-4">
+          <div class="flex justify-between"><dt class="text-gray-500">Participante</dt><dd class="font-medium text-gray-800"><%= attendee.name %></dd></div>
+          <div class="flex justify-between"><dt class="text-gray-500">Evento</dt><dd class="font-medium text-gray-800"><%= attendee.campaign_name %></dd></div>
+          <% if (attendee.event_date) { %>
+          <div class="flex justify-between"><dt class="text-gray-500">Fecha</dt><dd class="font-medium text-gray-800"><%= attendee.event_date %></dd></div>
+          <% } %>
+        </dl>
+      </div>
+    </div>
+
+    <% } else { %>
+    <!-- Valid with institution -->
+    <div class="bg-white rounded-2xl shadow-sm border border-green-100 overflow-hidden">
+
+      <!-- Institution header -->
+      <div class="bg-gradient-to-b from-green-50 to-white border-b border-green-100 px-6 pt-8 pb-6 text-center">
+        <% if (institution.logoDataUrl) { %>
+        <img src="<%= institution.logoDataUrl %>" alt=""
+             class="h-20 w-auto object-contain mx-auto mb-3" />
+        <% } else { %>
+        <div class="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-3">
+          <svg class="w-7 h-7 text-green-600" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4.26 10.147a60.436 60.436 0 00-.491 6.347A48.627 48.627 0 0112 20.904a48.627 48.627 0 018.232-4.41 60.46 60.46 0 00-.491-6.347m-15.482 0a50.57 50.57 0 00-2.658-.813A59.905 59.905 0 0112 3.493a59.902 59.902 0 0110.399 5.84c-.896.248-1.783.52-2.658.814m-15.482 0A50.697 50.697 0 0112 13.489a50.702 50.702 0 017.74-3.342M6.75 15a.75.75 0 100-1.5.75.75 0 000 1.5zm0 0v-3.675A55.378 55.378 0 0112 8.443m-7.007 11.55A5.981 5.981 0 006.75 15.75v-1.5" />
+          </svg>
+        </div>
+        <% } %>
+        <p class="text-sm font-bold text-gray-800"><%= institution.name %></p>
+        <p class="text-xs text-gray-500 mt-0.5">avala el siguiente certificado</p>
+      </div>
+
+      <!-- Certificate info -->
+      <div class="px-6 pt-5 pb-6 text-center">
+        <p class="text-xs font-semibold text-green-600 uppercase tracking-widest mb-1">Certificado válido</p>
+        <h1 class="text-2xl font-bold text-gray-900 mb-1"><%= attendee.name %></h1>
+        <p class="text-sm text-gray-500 mb-1">participó en</p>
+        <p class="text-lg font-semibold text-gray-800 mb-1"><%= attendee.campaign_name %></p>
+        <% if (attendee.event_date) { %>
+        <p class="text-sm text-gray-400 mb-4"><%= attendee.event_date %></p>
+        <% } %>
+
+        <div class="border-t border-green-100 pt-4 mt-2 text-xs text-gray-400">
+          Emitido el <%= attendee.sent_at ? attendee.sent_at.replace('T',' ').slice(0,16) : '—' %>
+        </div>
+      </div>
+    </div>
+    <% } %>
+
+    <% } else { %>
+    <!-- ── Generic verification (no institution) ─────── -->
+
+    <% if (!valid) { %>
+    <!-- Generic pending -->
+    <div class="bg-white rounded-2xl shadow-sm border border-amber-100 p-8 text-center">
+      <div class="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8 text-amber-400" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <h1 class="text-xl font-bold text-gray-800 mb-2">Certificado pendiente</h1>
+      <p class="text-sm text-gray-500 mb-5">Este certificado aún no ha sido emitido oficialmente.</p>
+      <dl class="text-left space-y-2 text-sm bg-gray-50 rounded-xl p-4">
+        <div class="flex justify-between"><dt class="text-gray-500">Participante</dt><dd class="font-medium text-gray-800"><%= attendee.name %></dd></div>
+        <div class="flex justify-between"><dt class="text-gray-500">Evento</dt><dd class="font-medium text-gray-800"><%= attendee.campaign_name %></dd></div>
+        <% if (attendee.event_date) { %>
+        <div class="flex justify-between"><dt class="text-gray-500">Fecha</dt><dd class="font-medium text-gray-800"><%= attendee.event_date %></dd></div>
+        <% } %>
+      </dl>
+    </div>
+
+    <% } else { %>
+    <!-- Generic valid -->
+    <div class="bg-white rounded-2xl shadow-sm border border-green-100 p-8 text-center">
+      <div class="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center mx-auto mb-4">
+        <svg class="w-8 h-8 text-green-500" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+        </svg>
+      </div>
+      <p class="text-xs font-semibold text-green-600 uppercase tracking-widest mb-1">Certificado válido</p>
+      <h1 class="text-2xl font-bold text-gray-900 mb-1"><%= attendee.name %></h1>
+      <p class="text-sm text-gray-500 mb-5">participó en</p>
+      <p class="text-lg font-semibold text-gray-800 mb-1"><%= attendee.campaign_name %></p>
+      <% if (attendee.event_date) { %>
+      <p class="text-sm text-gray-400 mb-5"><%= attendee.event_date %></p>
+      <% } %>
+      <div class="border-t border-gray-100 pt-4 mt-4 text-xs text-gray-400">
+        Emitido el <%= attendee.sent_at ? attendee.sent_at.replace('T',' ').slice(0,16) : '—' %>
+      </div>
+    </div>
+    <% } %>
+
+    <% } %>
+
+  </div>
+</body>
+</html>
