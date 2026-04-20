@@ -37,6 +37,38 @@ const upload = multer({
   limits: { fileSize: 50 * 1024 * 1024 }, // 50 MB
 });
 
+/**
+ * Extract the attendee's full name from a CSV row.
+ * Priority:
+ *   1. Single full-name column: asistente | name | nombre | full_name | fullname | nombre_completo
+ *   2. Two-part columns (first + last): joined with a space.
+ *      Tries: (nombre|first_name|firstname|nombres|primer_nombre) + (apellido|apellidos|last_name|lastname|surname|segundo_nombre)
+ * Returns '' if no usable combination is found.
+ */
+function extractName(row) {
+  // 1. Full-name columns
+  const full = (
+    row.asistente || row.name || row.full_name || row.fullname || row.nombre_completo
+  );
+  if (full && full.trim()) return full.trim();
+
+  // 2. Split first + last
+  const first = (
+    row.nombre || row.first_name || row.firstname || row.nombres || row.primer_nombre
+  );
+  const last = (
+    row.apellido || row.apellidos || row.last_name || row.lastname || row.surname || row.segundo_nombre
+  );
+  if (first && first.trim() && last && last.trim()) {
+    return `${first.trim()} ${last.trim()}`;
+  }
+  // Partial: only first or only last (unlikely but usable)
+  if (first && first.trim()) return first.trim();
+  if (last  && last.trim())  return last.trim();
+
+  return '';
+}
+
 // POST /attendees/parse-csv/:campaignId — parse CSV, return JSON preview (no DB write)
 router.post('/parse-csv/:campaignId', upload.single('csv'), (req, res) => {
   if (!req.file) return res.status(400).json({ error: 'No se recibió archivo' });
@@ -48,7 +80,7 @@ router.post('/parse-csv/:campaignId', upload.single('csv'), (req, res) => {
     .pipe(csv({ mapHeaders: ({ header }) => header.trim().toLowerCase() }))
     .on('data', row => {
       const email = (row.email || '').trim().toLowerCase();
-      const name  = (row.asistente || row.name || row.nombre || '').trim();
+      const name  = extractName(row);
       if (!email || !name) return;
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         parseErrors.push(`Email inválido: ${email}`);
@@ -151,7 +183,7 @@ router.post('/upload/:campaignId', upload.single('csv'), async (req, res) => {
         const insertMany = db.transaction(() => {
           for (const row of rows) {
             const email = (row.email || '').trim();
-            const name  = (row.asistente || row.name || row.nombre || '').trim();
+            const name  = extractName(row);
             if (!email || !name) { skipped++; continue; }
             if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
               errors.push(`Email inválido: ${email}`);
